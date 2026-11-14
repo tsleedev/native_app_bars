@@ -107,6 +107,29 @@ to bring UIKit into sync. Supply a preparation closure to move existing
 content before the confirmed index changes. The host continues to own the
 delegate, navigation stacks, appearance, and popup behavior.
 
+### Top bars and segments on an existing native host
+
+Use `NativeChromeNavigationPresentation.update` on the iOS main actor
+with the host's existing navigation item and bar. Supply the title, custom
+view, leading item, trailing items and interaction state. Standard placement
+uses UIKit's Back action and trailing buttons. Pinned placement uses the
+UIKit pinned trailing group and requests its compression preference on iOS
+27.1 and later. UIKit decides presentation for the active layout. Switching
+placement clears the previous Back and button groups. The host retains its
+navigation stacks, appearance, modal handling and insets.
+
+On Android, `NativeChromeToolbar` configures the content of an existing
+framework Toolbar. It applies titles, Up and menu state, while the host
+provides any custom action views or icons. `NativeChromeActionBar` works
+with a framework ActionBar attached to the existing Toolbar. Keep the Activity's
+usual options menu lifecycle and validate callbacks against the active route.
+
+Use `NativeChromeSegments` on an existing UIKit segmented control or
+`NativeChromeTabLayout` on an existing Android Material TabLayout.
+Programmatic selection is silent for the Android binder's own callback. Keep
+system styling, the callbacks' route checks and the view geometry in the app.
+Close the Android binder when the control leaves its host.
+
 ## Use
 
 Set `uses-material-design: true` in the consuming app when using Flutter's

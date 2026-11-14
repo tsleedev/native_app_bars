@@ -1,3 +1,8 @@
+## 0.1.0-dev.7
+
+- Apply titles, actions, and interaction state to existing UIKit navigation bars and Android toolbars. Hosts keep ownership of their views, layout, lifecycle, and navigation.
+- Synchronize selection and labels on existing UIKit segmented controls and Android Material tab layouts.
+
 ## 0.1.0-dev.6
 
 - The GitHub repository and Flutter package are now named `native_app_bars`. Change the Git URL and dependency key, and import `package:native_app_bars/native_app_bars.dart`. iOS hosts that import the pod directly use `import native_app_bars`. The native plugin classes, Android namespace, and channel protocol retain their existing identities.
