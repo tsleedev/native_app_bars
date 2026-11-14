@@ -24,6 +24,7 @@ data class NativeChromeActionSpec(
     val style: String = "icon",
     /** Optional badge on an icon action: "" dot, number or short text. */
     val badge: String? = null,
+    val androidOverflowIfRoom: Boolean = false,
 ) {
     companion object {
         fun parse(value: Any?): NativeChromeActionSpec? {
@@ -37,6 +38,7 @@ data class NativeChromeActionSpec(
                 loading = map["loading"] as? Boolean ?: false,
                 style = map["style"] as? String ?: "icon",
                 badge = map["badge"] as? String,
+                androidOverflowIfRoom = map["androidOverflowIfRoom"] == true,
             )
         }
     }
@@ -178,6 +180,7 @@ data class NativeChromeStateSpec(
     val dimDurationMs: Long,
     val rtl: Boolean,
     val appearance: NativeChromeAppearanceSpec,
+    val androidWindowInactive: Boolean = false,
 ) {
     companion object {
         fun parse(value: Any?): NativeChromeStateSpec? {
@@ -195,6 +198,7 @@ data class NativeChromeStateSpec(
                 dimDurationMs = (dim?.get("durationMs") as? Number)?.toLong() ?: 0L,
                 rtl = map["rtl"] as? Boolean ?: false,
                 appearance = NativeChromeAppearanceSpec.parse(map["appearance"]),
+                androidWindowInactive = map["androidWindowInactive"] == true,
             )
         }
     }
@@ -223,14 +227,17 @@ object NativeChromeFilter {
         action: NativeChromeActionSpec,
         stamp: NativeChromeOwnerStamp,
         transitioning: Boolean,
+        fromOverflow: Boolean = false,
     ): Map<String, Any?>? {
         val top = state?.top ?: return null
-        if (state.suspended || transitioning || !action.enabled) return null
+        val overflow = fromOverflow && action.androidOverflowIfRoom && !action.loading
+        if ((state.suspended && !(state.androidWindowInactive && overflow)) || transitioning || !action.enabled) return null
         if (top.stamp.ownerToken != stamp.ownerToken) return null
         return stamp.wire().apply {
             put("type", "topAction")
             put("actionId", action.id)
             put("lease", state.lease)
+            if (overflow) put("androidOverflow", true)
         }
     }
 }

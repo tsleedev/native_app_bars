@@ -2197,6 +2197,73 @@ void main() {
     });
   });
 
+  testWidgets('Android overflow focus permits only the current menu action', (
+    tester,
+  ) async {
+    var presses = 0;
+    await tester.pumpWidget(
+      testApp(
+        controller: controller,
+        home: NativeChromeScaffold(
+          topBar: NativeTopBar(
+            title: 'Inbox',
+            actions: [
+              NativeBarAction(
+                id: 'read',
+                label: 'Mark all read',
+                androidOverflowIfRoom: true,
+                onPressed: () => presses++,
+              ),
+            ],
+          ),
+          body: const SizedBox(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> overflow() => host.send('event', {
+      'type': 'topAction',
+      'actionId': 'read',
+      'lease': host.currentLease,
+      'requestId': host.nextRequestId(),
+      'ownerToken': host.top!['ownerToken'],
+      'routeSession': host.top!['routeSession'],
+      'androidOverflow': true,
+    });
+    controller.didChangeAppLifecycleState(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(host.updates.last['suspended'], isTrue);
+    expect(host.updates.last['androidWindowInactive'], isTrue);
+    await host.tapTop('read');
+    expect(presses, 0);
+    await overflow();
+    expect(presses, 1);
+    controller.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    await tester.pump();
+    expect(host.updates.last['androidWindowInactive'], isNull);
+    await overflow();
+    expect(presses, 1);
+  });
+
+  test('Android overflow is optional and leaves loading actions in place', () {
+    const plain = NativeBarAction(id: 'read', label: 'Mark all read');
+    const collapsible = NativeBarAction(
+      id: 'read',
+      label: 'Mark all read',
+      style: NativeBarActionStyle.text,
+      androidOverflowIfRoom: true,
+    );
+    const loading = NativeBarAction(
+      id: 'read',
+      label: 'Mark all read',
+      loading: true,
+      androidOverflowIfRoom: true,
+    );
+    expect(plain.toWire().containsKey('androidOverflowIfRoom'), isFalse);
+    expect(collapsible.toWire()['androidOverflowIfRoom'], isTrue);
+    expect(loading.toWire().containsKey('androidOverflowIfRoom'), isFalse);
+  });
+
   group('top action badge (optional wire field)', () {
     test('absent by default; sent only when set on an icon action', () {
       const plain = NativeBarAction(

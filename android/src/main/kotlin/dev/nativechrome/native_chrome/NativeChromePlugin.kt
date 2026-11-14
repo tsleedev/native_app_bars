@@ -7,6 +7,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -28,6 +31,10 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     private var channel: MethodChannel? = null
     private var activity: Activity? = null
     private var overlay: NativeChromeOverlay? = null
+    private var activityLifecycle: Lifecycle? = null
+    private val lifecycleObserver = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_PAUSE) overlay?.toolbar?.dismissPopupMenus()
+    }
     private var hostGeneration = 0
     private val connection = NativeChromeConnection()
     private val icons = HashMap<String, Bitmap>()
@@ -139,6 +146,8 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
             return
         }
         this.activity = activity
+        activityLifecycle = (activity as? LifecycleOwner)?.lifecycle
+        activityLifecycle?.addObserver(lifecycleObserver)
         // Defer until the Activity has set its content view (FlutterActivity
         // attaches plugins before setContentView).
         activity.window.decorView.post {
@@ -146,11 +155,15 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
             val content = activity.findViewById<ViewGroup>(android.R.id.content)
             if (content == null) {
                 this.activity = null
+                removeActivityLifecycleObserver()
                 publishHostReady(false)
                 return@post
             }
-            val view = NativeChromeOverlay(activity, { method, args ->
+            val view = NativeChromeOverlay(activity, sendFromView@{ method, args ->
                 if (hostGeneration == generation && this.activity === activity) {
+                    if (args["androidOverflow"] == true && activityLifecycle?.currentState != Lifecycle.State.RESUMED) {
+                        return@sendFromView
+                    }
                     val scoped = args + ("hostGeneration" to generation)
                     send(method, if (method == "geometry") scoped + ("lease" to connection.lease) else scoped)
                 }
@@ -169,11 +182,18 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
 
     private fun uninstall() {
         hostGeneration = nextHostGeneration.incrementAndGet()
+        removeActivityLifecycleObserver()
+        overlay?.toolbar?.dismissPopupMenus()
         overlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
         overlay = null
         activity = null
         connection.clearHostState()
         if (connection.lease != null) publishHostReady(false)
+    }
+
+    private fun removeActivityLifecycleObserver() {
+        activityLifecycle?.removeObserver(lifecycleObserver)
+        activityLifecycle = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) = install(binding.activity)

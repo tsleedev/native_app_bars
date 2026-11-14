@@ -751,6 +751,8 @@ class NativeChromeController extends ChangeNotifier
           : null,
       'bottomTransition': ?_bottomPresentationWire(),
       'suspended': suspended,
+      if (_androidWindowInactive && !popupSuspended)
+        'androidWindowInactive': true,
       'dim': popupSuspended && _config.dimDuringSuspension && dimColor != null
           ? <String, Object?>{
               'color': dimColor.toARGB32(),
@@ -1424,6 +1426,13 @@ class NativeChromeController extends ChangeNotifier
       return;
     }
     final owner = isTab ? _activeTab : _activeTop;
+    final actionId = args['actionId'];
+    final overflowWhileInactive =
+        !isTab &&
+        _androidWindowInactive &&
+        args['androidOverflow'] == true &&
+        actionId is String &&
+        owner?._findAction(actionId)?.androidOverflowIfRoom == true;
     NativeChromeRejection? reason;
     if (owner == null) {
       reason = NativeChromeRejection.noActiveOwner;
@@ -1433,8 +1442,7 @@ class NativeChromeController extends ChangeNotifier
       reason = NativeChromeRejection.sessionMismatch;
     } else if (!owner.native) {
       reason = NativeChromeRejection.notNative;
-    } else if (isSuspended || !_lifecycleActive) {
-      // Not resumed (inactive/hidden/paused) counts as suspended input.
+    } else if (isSuspended || (!_lifecycleActive && !overflowWhileInactive)) {
       reason = NativeChromeRejection.suspended;
     } else if ((isTab && _bottomPresentation != null) ||
         (!isTab && _transitioning(owner))) {
@@ -1517,10 +1525,14 @@ class NativeChromeController extends ChangeNotifier
   /// Every lifecycle notification renews both displayed owners' sessions:
   /// queued input from before or during inactivity stays stale after resume.
   late bool _lifecycleActive;
+  bool _androidWindowInactive = false;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycleActive = state == AppLifecycleState.resumed;
+    _androidWindowInactive =
+        defaultTargetPlatform == TargetPlatform.android &&
+        state == AppLifecycleState.inactive;
     _activeTop?.session++;
     _activeTab?.session++;
     _forceResend = true;

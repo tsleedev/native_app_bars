@@ -1,6 +1,6 @@
 name: native_chrome
 description: Native UIKit and Android bars with Flutter fallback and Dart-owned navigation.
-version: 0.1.0-dev.2
+version: 0.1.0-dev.3
 homepage: https://github.com/tsleedev/native_chrome
 repository: https://github.com/tsleedev/native_chrome
 publish_to: none

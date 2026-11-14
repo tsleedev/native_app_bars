@@ -273,6 +273,15 @@ events by reason (`ownerMismatch`, `sessionMismatch`, `suspended`,
 `transition`, `disabled`, `busy`, …). Debug builds log them with the
 `[native_chrome]` tag.
 
+### Android action overflow
+
+Set `NativeBarAction.androidOverflowIfRoom` on a trailing top-bar action to
+let Android move it into the toolbar menu when space is limited. Actions
+stay in the bar by default. Loading actions, iOS, and the Flutter renderer
+keep their existing placement. While the Android menu has focus, it accepts
+its own selections only while the host Activity is resumed. Pausing the
+Activity dismisses the menu.
+
 ## Support
 
 | Platform | Declared requirement | Verified for this candidate |

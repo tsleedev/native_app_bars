@@ -129,7 +129,9 @@ internal class NativeChromeOverlay(
         toolbar.setOnMenuItemClickListener { item ->
             val top = state?.top
             val action = top?.actions?.getOrNull(topIds.index(item.itemId))
-            if (top != null && action != null) emitTop(action, top.stamp)
+            if (top != null && action != null) {
+                emitTop(action, top.stamp, fromOverflow = toolbar.isOverflowMenuShowing)
+            }
             true
         }
         addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> publishGeometry() }
@@ -364,7 +366,10 @@ internal class NativeChromeOverlay(
         top.actions.forEachIndexed { index, action ->
             val item = menu.add(Menu.NONE, topIds.id(index), index, styledLabel(action, foreground))
             if (action.style == "icon") drawable(action.icon, foreground)?.let { item.icon = it }
-            item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            item.setShowAsAction(
+                if (action.androidOverflowIfRoom && !action.loading) MenuItem.SHOW_AS_ACTION_IF_ROOM
+                else MenuItem.SHOW_AS_ACTION_ALWAYS,
+            )
             item.isEnabled = action.enabled
             item.contentDescription = action.label
             if (action.style == "icon" && !action.loading) action.badge?.let { attachTopBadge(item, it, action.label) }
@@ -502,8 +507,8 @@ internal class NativeChromeOverlay(
         customTitle = row
     }
 
-    private fun emitTop(action: NativeChromeActionSpec, stamp: NativeChromeOwnerStamp) {
-        val event = NativeChromeFilter.topAction(state, action, stamp, transitionId != null)
+    private fun emitTop(action: NativeChromeActionSpec, stamp: NativeChromeOwnerStamp, fromOverflow: Boolean = false) {
+        val event = NativeChromeFilter.topAction(state, action, stamp, transitionId != null, fromOverflow)
         if (event == null) {
             nativeFiltered++
             android.util.Log.d(TAG, "filtered topAction ${action.id} suspended=${state?.suspended} transition=$transitionId")

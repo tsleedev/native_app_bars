@@ -119,6 +119,28 @@ class NativeChromeStateTest {
     }
 
     @Test
+    fun topActionOverflowIsOptIn() {
+        val action = mapOf("id" to "read", "label" to "Mark all read")
+        assertEquals(false, NativeChromeActionSpec.parse(action)!!.androidOverflowIfRoom)
+        assertEquals(true, NativeChromeActionSpec.parse(action + ("androidOverflowIfRoom" to true))!!.androidOverflowIfRoom)
+        assertEquals(false, NativeChromeActionSpec.parse(action + ("androidOverflowIfRoom" to "true"))!!.androidOverflowIfRoom)
+    }
+
+    @Test
+    fun overflowKeepsOnlyOptedInActionsDuringWindowFocusLoss() {
+        val state = NativeChromeStateSpec.parse(wire())!!.copy(suspended = true, androidWindowInactive = true)
+        val top = state.top!!
+        val regular = top.actions.first()
+        val overflow = regular.copy(androidOverflowIfRoom = true)
+        assertEquals(true, NativeChromeFilter.topAction(state, overflow, top.stamp, false, true)?.get("androidOverflow"))
+        assertNull(NativeChromeFilter.topAction(state, regular, top.stamp, false, true))
+        assertNull(NativeChromeFilter.topAction(state, overflow, top.stamp, false))
+        assertNull(NativeChromeFilter.topAction(state.copy(androidWindowInactive = false), overflow, top.stamp, false, true))
+        assertNull(NativeChromeFilter.topAction(state, overflow, top.stamp, true, true))
+        assertNull(NativeChromeFilter.topAction(state, overflow.copy(enabled = false), top.stamp, false, true))
+    }
+
+    @Test
     fun topActionFiltersStaleOwnerTransitionAndDisabled() {
         val state = NativeChromeStateSpec.parse(wire())!!
         val save = state.top!!.actions.first()

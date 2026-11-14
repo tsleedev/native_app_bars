@@ -1,3 +1,7 @@
+## 0.1.0-dev.3
+
+- Android trailing top-bar actions can opt into the native toolbar overflow with `NativeBarAction.androidOverflowIfRoom`. An overflow selection can run while that menu holds window focus and the Activity remains resumed. Pausing the Activity closes its menu.
+
 ## 0.1.0-dev.2
 
 - Android activities can opt out of the package overlay with `dev.nativechrome.overlayEnabled=false`. The setting is read from the concrete activity, including launches through aliases. Activities without the setting still install the overlay automatically.

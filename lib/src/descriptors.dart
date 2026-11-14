@@ -93,6 +93,7 @@ class NativeBarAction {
     this.loading = false,
     this.style = NativeBarActionStyle.icon,
     this.badge,
+    this.androidOverflowIfRoom = false,
   });
 
   /// Standard back button that pops the nearest navigator (Navigator 1 and 2).
@@ -103,7 +104,8 @@ class NativeBarAction {
       enabled = true,
       loading = false,
       style = NativeBarActionStyle.icon,
-      badge = null;
+      badge = null,
+      androidOverflowIfRoom = false;
 
   /// Close button for modal pages.
   const NativeBarAction.close({this.onPressed, String? label})
@@ -113,7 +115,8 @@ class NativeBarAction {
       enabled = true,
       loading = false,
       style = NativeBarActionStyle.icon,
-      badge = null;
+      badge = null,
+      androidOverflowIfRoom = false;
 
   /// Stable identifier. The same id must keep the same meaning within a page;
   /// change it when the action's meaning changes.
@@ -138,6 +141,10 @@ class NativeBarAction {
   /// not show it (UIKit bar items keep their icon).
   final String? badge;
 
+  /// Lets the Android top toolbar move this trailing action into overflow
+  /// when space is limited. Other renderers and loading actions are unchanged.
+  final bool androidOverflowIfRoom;
+
   bool get isEnabled => enabled && !loading && onPressed != null;
 
   Map<String, Object?> toWire() => <String, Object?>{
@@ -148,6 +155,7 @@ class NativeBarAction {
     'loading': loading,
     'style': style.name,
     'badge': ?(style == NativeBarActionStyle.icon ? badge : null),
+    if (androidOverflowIfRoom && !loading) 'androidOverflowIfRoom': true,
   };
 }
 
