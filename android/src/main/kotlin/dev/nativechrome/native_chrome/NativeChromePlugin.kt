@@ -1,6 +1,8 @@
 package dev.nativechrome.native_chrome
 
 import android.app.Activity
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.ViewGroup
@@ -10,6 +12,12 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.atomic.AtomicInteger
+
+private const val OVERLAY_ENABLED = "dev.nativechrome.overlayEnabled"
+
+// An engine can recreate its plugin while the same Dart isolate is alive.
+private val nextHostGeneration = AtomicInteger()
 
 /**
  * Installs native bars automatically on the Activity hosting the engine, as an
@@ -20,15 +28,19 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     private var channel: MethodChannel? = null
     private var activity: Activity? = null
     private var overlay: NativeChromeOverlay? = null
+    private var hostGeneration = 0
     private val connection = NativeChromeConnection()
     private val icons = HashMap<String, Bitmap>()
     private var iconVersion = 0
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        hostGeneration = nextHostGeneration.incrementAndGet()
         channel = MethodChannel(binding.binaryMessenger, "native_chrome/host").also { it.setMethodCallHandler(this) }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        if (activity != null || overlay != null) uninstall()
+        connection.lease?.let { connection.detach(it) }
         channel?.setMethodCallHandler(null)
         channel = null
     }
@@ -51,6 +63,7 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
                     "protocol" to 2,
                     "platform" to "android",
                     "lease" to lease,
+                    "hostGeneration" to hostGeneration,
                     // The overlay is installed right after the Activity's content view.
                     "hostInstalled" to (activity != null),
                 )
@@ -95,28 +108,72 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
         }
     }
 
+    @Suppress("DEPRECATION") // The int-flags overload also supports API 24–32.
+    private fun overlayEnabled(activity: Activity): Boolean {
+        // The launch intent can name an alias. Read the concrete activity's
+        // metadata so all entry points to the same class share the policy.
+        val component = ComponentName(activity.packageName, activity.javaClass.name)
+        return try {
+            activity.packageManager.getActivityInfo(component, PackageManager.GET_META_DATA)
+                .metaData?.getBoolean(OVERLAY_ENABLED, true) ?: true
+        } catch (_: PackageManager.NameNotFoundException) {
+            true
+        }
+    }
+
+    private fun publishHostReady(installed: Boolean) {
+        val info = mutableMapOf<String, Any?>(
+            "hostInstalled" to installed,
+            "lease" to connection.lease,
+            "hostGeneration" to hostGeneration,
+        )
+        overlay?.let { info["geometry"] = it.geometry() }
+        send("hostReady", info)
+    }
+
     private fun install(activity: Activity) {
+        val generation = nextHostGeneration.incrementAndGet()
+        hostGeneration = generation
+        if (!overlayEnabled(activity)) {
+            publishHostReady(false)
+            return
+        }
         this.activity = activity
         // Defer until the Activity has set its content view (FlutterActivity
         // attaches plugins before setContentView).
         activity.window.decorView.post {
-            if (this.activity !== activity || overlay != null) return@post
-            val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return@post
-            val view = NativeChromeOverlay(activity, ::send, connection::nextRequestId) { spec -> spec?.let { icons[it.key] } }
+            if (this.activity !== activity || hostGeneration != generation || overlay != null) return@post
+            val content = activity.findViewById<ViewGroup>(android.R.id.content)
+            if (content == null) {
+                this.activity = null
+                publishHostReady(false)
+                return@post
+            }
+            val view = NativeChromeOverlay(activity, { method, args ->
+                if (hostGeneration == generation && this.activity === activity) {
+                    val scoped = args + ("hostGeneration" to generation)
+                    send(method, if (method == "geometry") scoped + ("lease" to connection.lease) else scoped)
+                }
+            }, connection::nextRequestId) { spec -> spec?.let { icons[it.key] } }
             content.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             overlay = view
             view.iconVersion = iconVersion
             connection.lastState?.let { view.apply(it) }
             view.post {
-                send("hostReady", mapOf("hostInstalled" to true, "geometry" to view.geometry(), "lease" to connection.lease))
+                if (hostGeneration == generation && this.activity === activity && overlay === view) {
+                    publishHostReady(true)
+                }
             }
         }
     }
 
     private fun uninstall() {
+        hostGeneration = nextHostGeneration.incrementAndGet()
         overlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
         overlay = null
         activity = null
+        connection.clearHostState()
+        if (connection.lease != null) publishHostReady(false)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) = install(binding.activity)

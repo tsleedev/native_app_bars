@@ -50,6 +50,17 @@ For a local checkout, use a path dependency pointing at its package root.
 **Android:** nothing to do. The plugin adds the native bars to your Activity
 automatically (`FlutterActivity` or `FlutterFragmentActivity`).
 
+Apps that use the Dart descriptors with their own renderer can disable the
+overlay for a specific activity. Add this inside that activity's manifest
+entry:
+
+```xml
+<meta-data android:name="dev.nativechrome.overlayEnabled" android:value="false" />
+```
+
+The activity keeps its existing view hierarchy. If it uses the package's
+Flutter widgets, they use the Flutter renderer.
+
 **iOS:** wrap the Flutter view controller once at launch.
 
 The [standalone example](example/ios/Runner/AppDelegate.swift) registers

@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'native_chrome'
-  s.version          = '0.1.0-dev.1'
+  s.version          = '0.1.0-dev.2'
   s.summary          = 'Native UINavigationBar/UITabBar host for the native_chrome Flutter package.'
   s.description      = <<-DESC
 Hosts the Flutter view controller once and shows standalone UINavigationBar and UITabBar siblings driven from Dart.

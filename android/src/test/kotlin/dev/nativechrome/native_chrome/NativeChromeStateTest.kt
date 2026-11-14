@@ -37,6 +37,18 @@ class NativeChromeStateTest {
     )
 
     @Test
+    fun activityDetachDropsTheViewStateButKeepsTheEngineLease() {
+        val connection = NativeChromeConnection()
+        connection.attach("L1")
+        kotlin.test.assertTrue(connection.accept(assertNotNull(NativeChromeStateSpec.parse(wire()))))
+        assertEquals(1, connection.nextRequestId())
+        connection.clearHostState()
+        assertEquals("L1", connection.lease)
+        assertNull(connection.lastState)
+        assertEquals(2, connection.nextRequestId())
+    }
+
+    @Test
     fun parsesProtocolOne() {
         val state = assertNotNull(NativeChromeStateSpec.parse(wire()))
         assertEquals(3, state.revision)

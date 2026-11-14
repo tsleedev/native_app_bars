@@ -242,6 +242,7 @@ class NativeChromeController extends ChangeNotifier
   }
 
   bool? _hostInstalled;
+  int? _hostGeneration;
 
   /// Whether a native host exists. Null until the host answered.
   bool? get hostInstalled => _hostInstalled;
@@ -1248,7 +1249,7 @@ class NativeChromeController extends ChangeNotifier
     }
     _negotiationError = null;
     _adoptedLease = lease;
-    _applyHostInfo(reply);
+    if (_acceptHostGeneration(reply)) _applyHostInfo(reply);
     _forceResend = true;
     _markDirty();
     _notifySoon();
@@ -1305,6 +1306,15 @@ class NativeChromeController extends ChangeNotifier
       if (!installed) diagnostics.recordInfo('host unavailable');
       _notifySoon();
     }
+    if (!installed) {
+      _endTransition();
+      _clearBottomPresentation();
+      if (_geometry != const NativeChromeGeometry()) {
+        _geometry = const NativeChromeGeometry();
+        _notifySoon();
+      }
+      return;
+    }
     final geometry = info?['geometry'];
     if (geometry is Map) _applyGeometry(geometry);
   }
@@ -1316,22 +1326,49 @@ class NativeChromeController extends ChangeNotifier
     _notifySoon();
   }
 
+  bool _acceptHostGeneration(Map<Object?, Object?> args) {
+    final generation = args['hostGeneration'];
+    if (generation is! int) return true; // Older Android hosts and iOS.
+    final previous = _hostGeneration;
+    if (previous != null && generation < previous) return false;
+    if (generation != previous) {
+      _hostGeneration = generation;
+      if (_geometry != const NativeChromeGeometry()) {
+        _geometry = const NativeChromeGeometry();
+        _notifySoon();
+      }
+    }
+    return true;
+  }
+
   void _onMessage(String method, Map<Object?, Object?> args) {
     if (_disposed) return;
     switch (method) {
       case 'hostReady':
+        final lease = _lease;
+        if (_negotiationError != null || lease == null) return;
+        final generation = args['hostGeneration'];
+        final previousGeneration = _hostGeneration;
+        final lostLease = args['lease'] != lease;
+        if (generation is int &&
+            _attachInFlight &&
+            lostLease &&
+            previousGeneration != null &&
+            generation <= previousGeneration) {
+          return;
+        }
+        if (!_acceptHostGeneration(args)) return;
         _iconsSent.clear();
-        if (_negotiationError != null) return; // unsupported host: stay Flutter
         _applyHostInfo(args);
-        if (_lease != null &&
-            !_attachInFlight &&
-            _adoptedLease == _lease &&
-            args['lease'] != _lease) {
-          // Sent after the host confirmed our lease, yet the host no longer
-          // has it: the connection was lost. Negotiate a new lease so request
-          // ids and revisions restart together (a late request of the old
-          // connection stays rejected by lease). A hostReady that raced our
-          // attach (in flight) is stale and only triggers a resend.
+        // A newer Android surface can report that its plugin no longer has the
+        // lease before an earlier attach reply arrives. A new attach invalidates
+        // that reply. Legacy hosts only trigger recovery after lease adoption.
+        final newerHost =
+            generation is int &&
+            (previousGeneration == null || generation > previousGeneration);
+        if (lostLease &&
+            ((newerHost && _attachInFlight) ||
+                (!_attachInFlight && _adoptedLease == lease))) {
           diagnostics.recordInfo('host lost the connection; new lease');
           unawaited(attach());
           return;
@@ -1339,8 +1376,18 @@ class NativeChromeController extends ChangeNotifier
         _forceResend = true;
         _markDirty();
       case 'geometry':
+        if (args['hostGeneration'] is int &&
+            (!nativeAvailable ||
+                args['lease'] != _lease ||
+                args['hostGeneration'] != _hostGeneration)) {
+          return;
+        }
         _applyGeometry(args);
       case 'event':
+        if (args['hostGeneration'] is int &&
+            (!nativeAvailable || args['hostGeneration'] != _hostGeneration)) {
+          return;
+        }
         handleNativeEvent(args);
     }
   }
@@ -1497,6 +1544,7 @@ class NativeChromeController extends ChangeNotifier
     final adopted = _adoptedLease == lease;
     _lease = null;
     _adoptedLease = null;
+    _hostGeneration = null;
     _attachInFlight = false;
     _lastStateJson = null;
     // Only a host that adopted the lease is told; nothing is sent to a host

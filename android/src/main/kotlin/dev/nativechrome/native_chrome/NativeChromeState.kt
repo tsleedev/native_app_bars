@@ -265,6 +265,11 @@ class NativeChromeConnection {
         return true
     }
 
+    /** The activity's views are gone. Keep the lease and monotonic request IDs. */
+    fun clearHostState() {
+        lastState = null
+    }
+
     /** Accepts [state] if it belongs to the current lease and is not older. */
     fun accept(state: NativeChromeStateSpec): Boolean {
         if (state.lease != lease) return false

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:native_chrome/native_chrome.dart';
@@ -1451,6 +1454,140 @@ void main() {
       );
     });
 
+    testWidgets('Android activity availability ignores stale host messages', (
+      tester,
+    ) async {
+      await controller.attach();
+      final lease = host.currentLease;
+
+      Future<void> ready(int generation, bool installed, {double? height}) =>
+          host.send('hostReady', <String, Object?>{
+            'lease': lease,
+            'hostGeneration': generation,
+            'hostInstalled': installed,
+            if (height != null) 'geometry': {'topBarHeight': height},
+          });
+
+      await ready(1, true, height: 56);
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.native);
+      expect(controller.geometry.topBarHeight, 56);
+
+      await ready(2, false);
+      await ready(3, false);
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.flutter);
+      expect(controller.geometry.measured, isFalse);
+      await ready(1, true, height: 99);
+      await host.send('geometry', {
+        'lease': lease,
+        'hostGeneration': 1,
+        'topBarHeight': 99,
+      });
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.flutter);
+      expect(controller.geometry.measured, isFalse);
+
+      await ready(4, true, height: 60);
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.native);
+      await host.send('geometry', {
+        'lease': 'previous-lease',
+        'hostGeneration': 4,
+        'topBarHeight': 99,
+      });
+      expect(controller.geometry.topBarHeight, 60);
+      await host.send('geometry', {
+        'lease': lease,
+        'hostGeneration': 4,
+        'topBarHeight': 64,
+      });
+      expect(controller.geometry.topBarHeight, 64);
+      expect(host.currentLease, lease);
+    });
+
+    testWidgets('new Android plugin ready wins over a delayed attach reply', (
+      tester,
+    ) async {
+      const channel = MethodChannel(nativeChromeChannelName);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final first = Completer<Map<String, Object?>>();
+      final leases = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method != 'attach') return null;
+        final lease = (call.arguments as Map)['lease'] as String;
+        leases.add(lease);
+        if (leases.length == 1) return first.future;
+        return {
+          'protocol': nativeChromeProtocolVersion,
+          'hostInstalled': false,
+          'hostGeneration': 8,
+          'lease': lease,
+        };
+      });
+
+      final initialAttach = controller.attach();
+      await tester.pump();
+      await host.send('hostReady', {
+        'hostInstalled': true,
+        'hostGeneration': 8,
+        'lease': null,
+      });
+      await tester.pump();
+      expect(leases, hasLength(2));
+      expect(leases[1], isNot(leases[0]));
+
+      first.complete({
+        'protocol': nativeChromeProtocolVersion,
+        'hostInstalled': true,
+        'hostGeneration': 4,
+        'lease': leases[0],
+        'geometry': {'topBarHeight': 99.0},
+      });
+      await initialAttach;
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.flutter);
+      expect(controller.geometry.measured, isFalse);
+
+      await host.send('hostReady', {
+        'hostInstalled': true,
+        'hostGeneration': 9,
+        'lease': leases[1],
+        'geometry': {'topBarHeight': 56.0},
+      });
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.native);
+      expect(controller.geometry.topBarHeight, 56);
+    });
+
+    testWidgets('newer Android unavailable beats an older attach reply', (
+      tester,
+    ) async {
+      const channel = MethodChannel(nativeChromeChannelName);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final response = Completer<Map<String, Object?>>();
+      late String lease;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method != 'attach') return null;
+        lease = (call.arguments as Map)['lease'] as String;
+        return response.future;
+      });
+
+      final attaching = controller.attach();
+      await tester.pump();
+      await host.send('hostReady', {
+        'hostInstalled': false,
+        'hostGeneration': 3,
+        'lease': lease,
+      });
+      response.complete({
+        'protocol': nativeChromeProtocolVersion,
+        'hostInstalled': true,
+        'hostGeneration': 2,
+        'lease': lease,
+        'geometry': {'topBarHeight': 99.0},
+      });
+      await attaching;
+      expect(controller.rendererFor(ChromeBarKind.top), ChromeRenderer.flutter);
+      expect(controller.geometry.measured, isFalse);
+    });
+
     testWidgets('hostReady with our lease keeps the counter running', (
       tester,
     ) async {
@@ -2093,9 +2230,7 @@ void main() {
       );
     });
 
-    testWidgets('Flutter renderer shows the badge on the icon', (
-      tester,
-    ) async {
+    testWidgets('Flutter renderer shows the badge on the icon', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: NativeChrome(

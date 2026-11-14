@@ -1,4 +1,9 @@
-## 0.1.0-dev.1 (unreleased)
+## 0.1.0-dev.2
+
+- Android activities can opt out of the package overlay with `dev.nativechrome.overlayEnabled=false`. The setting is read from the concrete activity, including launches through aliases. Activities without the setting still install the overlay automatically.
+- Android clears the previous activity's chrome state and geometry when switching hosts. Flutter renegotiates the connection if a plugin is recreated while its Dart isolate is still running, and ignores delayed events and replies from the old host.
+
+## 0.1.0-dev.1
 
 - iOS push and back transitions follow the Cupertino page curve for programmatic moves and linear progress during gestures. Push snapshots clip to the outgoing page. Routes with chrome on one side still animate, and removing or replacing the moving route ends synchronization.
 
