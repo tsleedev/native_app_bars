@@ -88,6 +88,25 @@ An iOS host that already manages a `UINavigationItem` can create a text
 action with `NativeChromeBarButton.text`. Call it on the main actor. The host
 owns the item, layout, enabled state, and current route's action callback.
 
+### Tabs on an existing native host
+
+On Android, construct `NativeChromeBottomMenu` with your configured Material
+`BottomNavigationView` and the selection callback. Use unique, nonzero menu
+IDs. The binder owns its items and both selection listeners. Use `setItems`
+for labels and icons, `update` for enabled state and additional accessibility
+text, and `select` to confirm a selection without dispatching the callback.
+With the same IDs in the same order, updates keep the existing menu items and
+badge objects. If you change the IDs or order, reapply each item's badge and
+enabled state after `setItems`. Call `close` before disposing the host. Keep the
+Material dependency, colors, dimensions, insets, and bar visibility in the app.
+
+On iOS, create `NativeChromeManagedTabs` for an existing `UITabBarController`
+on the main actor. Use `makeItem` to create UIKit tab items and `install` to
+assign the child controllers. Call `confirm` with the current app selection
+to bring UIKit into sync. Supply a preparation closure to move existing
+content before the confirmed index changes. The host continues to own the
+delegate, navigation stacks, appearance, and popup behavior.
+
 ## Use
 
 Set `uses-material-design: true` in the consuming app when using Flutter's

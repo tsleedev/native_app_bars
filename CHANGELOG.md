@@ -1,3 +1,8 @@
+## 0.1.0-dev.5
+
+- Android hosts can use `NativeChromeBottomMenu` to create and update the items of an existing Material `BottomNavigationView`, handle selection, and keep their configured styling and layout.
+- iOS hosts can use `NativeChromeManagedTabs` to create UIKit tab items and synchronize a host-owned `UITabBarController` while keeping its navigation stacks and delegate.
+
 ## 0.1.0-dev.4
 
 - Android hosts can present a package toolbar in their existing slot with `EmbeddedNativeTopBar`. The existing bar remains available until the replacement has laid out. Pausing the activity or detaching the slot restores the existing bar.

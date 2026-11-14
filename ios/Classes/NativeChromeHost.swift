@@ -684,7 +684,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     let ids = tab.items.map(\.id)
     if ids != tabIds || tabBar.items?.count != ids.count {
       tabIds = ids
-      let items = tab.items.enumerated().map { index, _ in UITabBarItem(title: nil, image: nil, tag: index) }
+      let items = tab.items.enumerated().map { index, _ in NativeChromeManagedTabs.makeItem(title: nil, image: nil, tag: index) }
       tabBar.setItems(items, animated: false)
     }
     let items = tabBar.items ?? []
@@ -695,19 +695,16 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     for (index, spec) in tab.items.enumerated() where index < items.count {
       let item = items[index]
       let previous = previousItems.flatMap { index < $0.count ? $0[index] : nil }
-      if previous?.badge != spec.badge || previous == nil { item.badgeValue = spec.badge }
-      if previous?.accessibilityValue != spec.accessibilityValue || previous == nil {
-        item.accessibilityValue = spec.accessibilityValue
-      }
+      NativeChromeManagedTabs.updateItem(
+        item, title: spec.label, enabled: spec.enabled, updatesBadge: true,
+        badge: spec.badge, accessibilityValue: spec.accessibilityValue)
       if let previous, previous.id == spec.id, previous.label == spec.label, previous.icon == spec.icon,
         previous.selectedIcon == spec.selectedIcon, previous.enabled == spec.enabled
       {
         continue
       }
-      item.title = spec.label
       item.image = NativeChromeHub.shared.icon(for: spec.icon)
       item.selectedImage = NativeChromeHub.shared.icon(for: spec.selectedIcon ?? spec.icon)
-      item.isEnabled = spec.enabled
       item.accessibilityLabel = spec.label
       item.accessibilityIdentifier = "native_chrome.tab.\(spec.id)"
     }
