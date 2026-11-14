@@ -1,5 +1,5 @@
 name: native_chrome_example
-description: Standalone example of the native_chrome Flutter plugin.
+description: Standalone example of the native_app_bars Flutter plugin.
 publish_to: none
 version: 1.0.0+1
 environment:
@@ -7,7 +7,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  native_chrome:
+  native_app_bars:
     path: ../
 dev_dependencies:
   flutter_test:

@@ -1,15 +1,15 @@
 #
 # To learn more about a Podspec see http://guides.cocoapods.org/syntax/podspec.html.
-# Run `pod lib lint native_chrome.podspec` to validate before publishing.
+# Run `pod lib lint native_app_bars.podspec` to validate before publishing.
 #
 Pod::Spec.new do |s|
-  s.name             = 'native_chrome'
-  s.version          = '0.1.0-dev.5'
-  s.summary          = 'Native UINavigationBar/UITabBar host for the native_chrome Flutter package.'
+  s.name             = 'native_app_bars'
+  s.version          = '0.1.0-dev.6'
+  s.summary          = 'Native UINavigationBar/UITabBar host for the native_app_bars Flutter package.'
   s.description      = <<-DESC
 Hosts the Flutter view controller once and shows standalone UINavigationBar and UITabBar siblings driven from Dart.
                        DESC
-  s.homepage         = 'https://github.com/tsleedev/native_chrome'
+  s.homepage         = 'https://github.com/tsleedev/native_app_bars'
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
   s.author           = 'TaeSu Lee'
   # Flutter uses a local pod path. A remote CocoaPods source uses the version tag.

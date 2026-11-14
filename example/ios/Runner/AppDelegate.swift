@@ -1,6 +1,6 @@
 import Flutter
 import UIKit
-import native_chrome
+import native_app_bars
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {

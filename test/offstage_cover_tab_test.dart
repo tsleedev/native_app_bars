@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:native_chrome/native_chrome.dart';
+import 'package:native_app_bars/native_app_bars.dart';
 
 import 'support/fake_host.dart';
 

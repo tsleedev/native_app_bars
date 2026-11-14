@@ -1,4 +1,4 @@
-# native_chrome
+# native_app_bars
 
 Real OS top bars and tab bars for Flutter apps — `UINavigationBar` / `UITabBar`
 on iOS, `MaterialToolbar` / `BottomNavigationView` / `NavigationRailView` on Android — or Flutter
@@ -34,9 +34,9 @@ repository has a published commit or release tag.
 
 ```yaml
 dependencies:
-  native_chrome:
+  native_app_bars:
     git:
-      url: https://github.com/tsleedev/native_chrome.git
+      url: https://github.com/tsleedev/native_app_bars.git
       ref: "<published-commit-sha-or-release-tag>"
 ```
 

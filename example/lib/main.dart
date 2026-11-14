@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/material.dart';
-import 'package:native_chrome/native_chrome.dart';
+import 'package:native_app_bars/native_app_bars.dart';
 
 void main() => runApp(const ChromeExample());
 

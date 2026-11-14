@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:native_chrome/native_chrome.dart';
+import 'package:native_app_bars/native_app_bars.dart';
 
 /// Fake native host speaking the real MethodChannel protocol and mirroring the
 /// native host rules (iOS NativeChromeHub / Android NativeChromeConnection):
