@@ -1,3 +1,8 @@
+## 0.1.0-dev.4
+
+- Android hosts can present a package toolbar in their existing slot with `EmbeddedNativeTopBar`. The existing bar remains available until the replacement has laid out. Pausing the activity or detaching the slot restores the existing bar.
+- iOS hosts can create a package text action with `NativeChromeBarButton.text` for an existing navigation item and keep their current view-controller hierarchy.
+
 ## 0.1.0-dev.3
 
 - Android trailing top-bar actions can opt into the native toolbar overflow with `NativeBarAction.androidOverflowIfRoom`. An overflow selection can run while that menu holds window focus and the Activity remains resumed. Pausing the Activity closes its menu.

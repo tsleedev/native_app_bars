@@ -65,6 +65,8 @@ internal class NativeChromeOverlay(
 
     /** Bumped by the plugin when new icon bitmaps arrive. */
     var iconVersion = 0
+    var nativeLeadingIcon: Drawable? = null
+    var hostOwnsInsets = false
     private var tabIds: List<String> = emptyList()
     private var applying = false
     private var insetTop = 0
@@ -146,6 +148,7 @@ internal class NativeChromeOverlay(
     private var rawInsets = IntArray(4)
 
     private fun recordInsets(insets: WindowInsetsCompat) {
+        if (hostOwnsInsets) return
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
         rawInsets = intArrayOf(bars.left, bars.top, bars.right, bars.bottom)
         applyEffectiveInsets()
@@ -289,7 +292,9 @@ internal class NativeChromeOverlay(
     fun apply(next: NativeChromeStateSpec) {
         val previous = state
         state = next
-        layoutDirection = if (next.rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        if (!hostOwnsInsets) {
+            layoutDirection = if (next.rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        }
         updateRailPadding()
         topContainer.alpha = next.top?.opacity ?: 1f
         applyTop(next.top, next.appearance)
@@ -329,11 +334,11 @@ internal class NativeChromeOverlay(
         // too so both keep their order (Toolbar lays out custom views after
         // its own title).
         val leadingIsIcon = leading != null && leading.style == "icon" && !leading.loading &&
-            drawable(leading.icon, foreground) != null
+            (nativeLeadingIcon != null || drawable(leading.icon, foreground) != null)
         leadingView?.let { toolbar.removeView(it) }
         leadingView = null
         if (leading != null && leadingIsIcon) {
-            toolbar.navigationIcon = drawable(leading.icon, foreground)
+            toolbar.navigationIcon = nativeLeadingIcon ?: drawable(leading.icon, foreground)
             toolbar.navigationContentDescription = leading.label
             toolbar.setNavigationOnClickListener { emitTop(leading, top.stamp) }
         } else {

@@ -61,6 +61,16 @@ entry:
 The activity keeps its existing view hierarchy. If it uses the package's
 Flutter widgets, they use the Flutter renderer.
 
+An Android host that already owns its toolbar slot can use
+`EmbeddedNativeTopBar` with overlay installation disabled. Pass the existing
+bar, toolbar content, and the host's effective insets to `show`. The package
+waits for the replacement's first laid-out frame before hiding the existing
+bar. Observe that swap with `onVisibilityChanged`. Read the displayed
+toolbar's bottom with `bottomIn` in the coordinate space of your content view.
+Consume that geometry once in the host. Call `hide` when the route loses its
+slot, and `close` when disposing it. A paused activity automatically restores
+the existing bar. The host remains responsible for route and modal ownership.
+
 **iOS:** wrap the Flutter view controller once at launch.
 
 The [standalone example](example/ios/Runner/AppDelegate.swift) registers
@@ -73,6 +83,10 @@ For an existing app with a pre-scene lifecycle, call
 
 If the host is not installed, bars fall back to the Flutter renderer, and
 `NativeChrome.of(context).diagnostics.hostIssue` explains why.
+
+An iOS host that already manages a `UINavigationItem` can create a text
+action with `NativeChromeBarButton.text`. Call it on the main actor. The host
+owns the item, layout, enabled state, and current route's action callback.
 
 ## Use
 

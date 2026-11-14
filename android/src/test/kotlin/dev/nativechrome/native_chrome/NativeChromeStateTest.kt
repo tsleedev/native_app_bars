@@ -119,6 +119,20 @@ class NativeChromeStateTest {
     }
 
     @Test
+    fun embeddedToolbarRejectsEventsFromReplacedAndClosedPresentations() {
+        val ownership = EmbeddedTopBarOwnership()
+        assertEquals(false, ownership.accepts(null))
+        val first = ownership.replace()
+        assertEquals(true, ownership.accepts(first))
+        val replacement = ownership.replace()
+        assertEquals(false, ownership.accepts(first))
+        assertEquals(true, ownership.accepts(replacement))
+        ownership.clear()
+        assertEquals(false, ownership.accepts(replacement))
+        assertEquals(false, ownership.accepts(ownership.replace() - 1))
+    }
+
+    @Test
     fun topActionOverflowIsOptIn() {
         val action = mapOf("id" to "read", "label" to "Mark all read")
         assertEquals(false, NativeChromeActionSpec.parse(action)!!.androidOverflowIfRoom)

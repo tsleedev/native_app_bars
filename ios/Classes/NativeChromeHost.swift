@@ -639,17 +639,11 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       return item
     }
     let stamp = top.stamp
-    let handler = UIAction { [weak self] _ in self?.emitTop(action, stamp: stamp) }
     let image = action.style == "icon" ? NativeChromeHub.shared.icon(for: action.icon) : nil
-    let item = UIBarButtonItem(
-      title: image == nil ? action.label : nil, image: image, primaryAction: handler, menu: nil)
-    item.style = action.style == "done" ? .done : .plain
-    if let foreground { item.tintColor = foreground }
-    item.isEnabled = action.enabled
-    item.accessibilityLabel = action.label
-    item.accessibilityIdentifier = identifier
-    if #available(iOS 27.1, *) { item.axisBehavior = image != nil ? .verticalPreferred : .horizontalOnly }
-    return item
+    return NativeChromeBarButton.button(
+      label: action.label, image: image, identifier: identifier, enabled: action.enabled,
+      done: action.style == "done", tint: foreground
+    ) { [weak self] in self?.emitTop(action, stamp: stamp) }
   }
 
   private func emitTop(_ action: NativeChromeActionSpec, stamp: NativeChromeOwnerStamp) {
