@@ -1,5 +1,7 @@
 import Flutter
+import ImageIO
 import UIKit
+import UniformTypeIdentifiers
 
 /// Installs the native chrome host once at launch.
 ///
@@ -508,6 +510,8 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       key.0 == appearance, key.1 == iconVersion {
       // Items are reused; only restore the bar's own tint (cheap, no rebuild).
       if navigationBar.tintColor != effectiveTint { navigationBar.tintColor = effectiveTint }
+      refreshAccessories(top, previous: appliedTop)
+      self.appliedTop = top
       setTopInteraction(!(state?.suspended ?? false) && transitionId == nil)
       return
     }
@@ -640,10 +644,68 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     }
     let stamp = top.stamp
     let image = action.style == "icon" ? NativeChromeHub.shared.icon(for: action.icon) : nil
-    return NativeChromeBarButton.button(
+    let item = NativeChromeBarButton.button(
       label: action.label, image: image, identifier: identifier, enabled: action.enabled,
       done: action.style == "done", tint: foreground
     ) { [weak self] in self?.emitTop(action, stamp: stamp) }
+    updateAccessories(item, action: action, previous: nil)
+    return item
+  }
+
+  private func refreshAccessories(_ top: NativeChromeTopSpec, previous: NativeChromeTopSpec) {
+    let item = topNavigationItem
+    if let action = top.leading, let leading = item.leadingItemGroups.first?.barButtonItems.first {
+      updateAccessories(leading, action: action, previous: previous.leading)
+    }
+    let pinned = item.pinnedTrailingGroup?.barButtonItems ?? []
+    let trailing = pinned + Array((item.rightBarButtonItems ?? []).reversed())
+    for (index, button) in trailing.enumerated() where top.actions.indices.contains(index) {
+      updateAccessories(button, action: top.actions[index], previous: previous.actions[index])
+    }
+  }
+
+  private func updateAccessories(
+    _ item: UIBarButtonItem, action: NativeChromeActionSpec, previous: NativeChromeActionSpec?
+  ) {
+    if action.iosAvatarPNG != previous?.iosAvatarPNG {
+      let image = avatarImage(action.iosAvatarPNG) ?? NativeChromeHub.shared.icon(for: action.icon)
+      item.image = image
+      item.title = image == nil ? action.label : nil
+      if #available(iOS 27.1, *) {
+        item.axisBehavior = image != nil ? .verticalPreferred : .horizontalOnly
+      }
+    }
+    if action.iosBadgeAccessibilityValue != previous?.iosBadgeAccessibilityValue {
+      item.accessibilityValue = action.iosBadgeAccessibilityValue
+    }
+    if #available(iOS 26.0, *), action.iosBadge != previous?.iosBadge {
+      item.badge = action.iosBadge.map { value in
+        if value.isEmpty { return .indicator() }
+        if let count = Int(value), count >= 0 { return .count(count) }
+        return .string(value)
+      }
+    }
+  }
+
+  private func avatarImage(_ png: Data?) -> UIImage? {
+    guard let png, let source = CGImageSourceCreateWithData(png as CFData, nil),
+      CGImageSourceGetType(source).map({ $0 as String }) == UTType.png.identifier,
+      CGImageSourceGetCount(source) == 1,
+      let metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+      let width = metadata[kCGImagePropertyPixelWidth] as? Int,
+      let height = metadata[kCGImagePropertyPixelHeight] as? Int,
+      (1...128).contains(width), (1...128).contains(height),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else { return nil }
+    let size = CGFloat(24)
+    let scale = size / CGFloat(min(width, height))
+    let w = CGFloat(width) * scale
+    let h = CGFloat(height) * scale
+    let bounds = CGRect(x: 0, y: 0, width: size, height: size)
+    return UIGraphicsImageRenderer(size: bounds.size).image { _ in
+      UIBezierPath(ovalIn: bounds).addClip()
+      UIImage(cgImage: image).draw(in: CGRect(x: (size - w) / 2, y: (size - h) / 2, width: w, height: h))
+    }.withRenderingMode(.alwaysOriginal)
   }
 
   private func emitTop(_ action: NativeChromeActionSpec, stamp: NativeChromeOwnerStamp) {
@@ -1034,74 +1096,21 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
 
   private func setTransitionProgress(_ progress: CGFloat) {
     guard transitionId != nil else { return }
-    let width = view.bounds.width
-    let sign: CGFloat = transitionRTL ? -1 : 1
-    let p = min(max(progress, 0), 1)
-    transitionProgress = p
-    let outgoing = [transitionSnapshot, transitionRailSnapshot].compactMap { $0 }
-    if transitionStyle == "fade" {
-      // a route that does not slide (for example a fade) cross-fades
-      // the bars in place instead of sliding them across a still page.
-      chromeContainer.transform = .identity
-      chromeContainer.layer.mask = nil
-      setTransitionChromeAlpha(p)
-      for snapshot in outgoing {
-        snapshot.transform = .identity
-        snapshot.layer.mask = nil
-        snapshot.alpha = 1 - p
-      }
-      if let tabView = transitionTabSnapshot { tabView.alpha = tabBar.isHidden ? 1 - p : 0 }
-      tabBar.alpha = !transitionTabWasVisible && !tabBar.isHidden ? p : 1
-      return
-    }
-    setTransitionChromeAlpha(1)
-    if transitionDirection == "push" {
-      chromeContainer.transform = CGAffineTransform(translationX: sign * (1 - p) * width, y: 0)
-      chromeContainer.layer.mask = nil
-      // the outgoing bar (a strip of the outgoing page) stays
-      // only where the outgoing page still shows, left of the incoming page
-      // edge, and fades like a UINavigationController push. Before, it stayed
-      // whole and opaque under the incoming glass bar until the end.
-      let edge = sign > 0 ? (1 - p) * width : p * width
-      let visible = sign > 0
-        ? CGRect(x: 0, y: 0, width: max(0, edge), height: view.bounds.height)
-        : CGRect(x: edge, y: 0, width: max(0, width - edge), height: view.bounds.height)
-      for snapshot in outgoing {
-        snapshot.transform = CGAffineTransform(translationX: -sign * 0.3 * p * width, y: 0)
-        snapshot.alpha = 1 - p
-        clip(snapshot, to: visible)
-      }
-    } else {
-      for snapshot in outgoing {
-        snapshot.transform = CGAffineTransform(translationX: sign * p * width, y: 0)
-        snapshot.alpha = 1
-        snapshot.layer.mask = nil
-      }
-      chromeContainer.transform = CGAffineTransform(translationX: -sign * 0.3 * (1 - p) * width, y: 0)
-      if transitionSnapshot == nil {
-        // no outgoing bar covers the incoming one; show it only
-        // where the outgoing (bar-less) page has uncovered the page below.
-        let edge = sign > 0 ? p * width : (1 - p) * width
-        let visible = sign > 0
-          ? CGRect(x: 0, y: 0, width: max(0, edge), height: view.bounds.height)
-          : CGRect(x: edge, y: 0, width: max(0, width - edge), height: view.bounds.height)
-        clip(chromeContainer, to: visible)
-      } else {
-        chromeContainer.layer.mask = nil
-      }
-    }
-  }
-
-  /// Masks [target] to [rect] (Host view coordinates, transform included).
-  private func clip(_ target: UIView, to rect: CGRect) {
-    let mask = (target.layer.mask as? CAShapeLayer) ?? CAShapeLayer()
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    mask.frame = target.bounds
-    let local = target.convert(rect, from: view).intersection(target.bounds)
-    mask.path = UIBezierPath(rect: local.isNull ? .zero : local).cgPath
-    target.layer.mask = mask
-    CATransaction.commit()
+    transitionProgress = min(max(progress, 0), 1)
+    NativeChromeTransitionPresentation.render(
+      progress: transitionProgress,
+      direction: transitionDirection,
+      style: transitionStyle,
+      rtl: transitionRTL,
+      container: view,
+      chromeContainer: chromeContainer,
+      strip: transitionSnapshot,
+      rail: transitionRailSnapshot,
+      tabBar: tabBar,
+      tabSnapshot: transitionTabSnapshot,
+      tabWasVisible: transitionTabWasVisible,
+      setTransitionChromeAlpha: setTransitionChromeAlpha
+    )
   }
 
   private func setTransitionChromeAlpha(_ alpha: CGFloat) {

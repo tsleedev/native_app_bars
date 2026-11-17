@@ -1,3 +1,4 @@
+import Flutter
 import UIKit
 
 /// Wire model for the `update` message (protocol 1). Parsing is isolated so it
@@ -22,7 +23,16 @@ public struct NativeChromeActionSpec: Equatable {
   /// icon | text | done
   public let style: String
 
-  init?(_ value: Any?) {
+  let iosBadge: String?
+  let iosBadgeAccessibilityValue: String?
+  let iosAvatarPNG: Data?
+
+  func hasSameControl(as other: NativeChromeActionSpec) -> Bool {
+    id == other.id && label == other.label && icon == other.icon &&
+      enabled == other.enabled && loading == other.loading && style == other.style
+  }
+
+  init?(_ value: Any?, allowsAvatar: Bool = false) {
     guard let map = value as? [String: Any], let id = map["id"] as? String else { return nil }
     self.id = id
     self.label = map["label"] as? String ?? id
@@ -30,6 +40,23 @@ public struct NativeChromeActionSpec: Equatable {
     self.enabled = map["enabled"] as? Bool ?? false
     self.loading = map["loading"] as? Bool ?? false
     self.style = map["style"] as? String ?? "icon"
+    let badge = map["badge"] as? String
+    let value = map["iosBadgeAccessibilityValue"] as? String
+    if style == "icon", !loading, let badge, badge.utf16.count <= 16,
+      let value, !value.isEmpty, value.utf16.count <= 256 {
+      iosBadge = badge
+      iosBadgeAccessibilityValue = value
+    } else {
+      iosBadge = nil
+      iosBadgeAccessibilityValue = nil
+    }
+    if allowsAvatar, style == "icon", !loading,
+      let data = map["iosAvatarPNG"] as? FlutterStandardTypedData,
+      (1...65536).contains(data.data.count) {
+      iosAvatarPNG = data.data
+    } else {
+      iosAvatarPNG = nil
+    }
   }
 }
 
@@ -75,7 +102,11 @@ public struct NativeChromeTopSpec: Equatable {
       && title == other.title && presentation == other.presentation
       && titleAlignment == other.titleAlignment && titleAction == other.titleAction
       && background == other.background && foreground == other.foreground
-      && leading == other.leading && actions == other.actions && pinFirstAction == other.pinFirstAction
+      && (leading.map { action in other.leading.map { action.hasSameControl(as: $0) } ?? false }
+          ?? (other.leading == nil))
+      && actions.count == other.actions.count
+      && zip(actions, other.actions).allSatisfy { $0.hasSameControl(as: $1) }
+      && pinFirstAction == other.pinFirstAction
   }
 
   init?(_ value: Any?) {
@@ -87,7 +118,7 @@ public struct NativeChromeTopSpec: Equatable {
     titleAction = NativeChromeActionSpec(map["titleAction"])
     background = NativeChromeAppearanceSpec.color(map["background"])
     foreground = NativeChromeAppearanceSpec.color(map["foreground"])
-    leading = NativeChromeActionSpec(map["leading"])
+    leading = NativeChromeActionSpec(map["leading"], allowsAvatar: true)
     actions = (map["actions"] as? [Any] ?? []).compactMap { NativeChromeActionSpec($0) }
     pinFirstAction = map["pinFirstAction"] as? Bool ?? false
     let requested = (map["opacity"] as? NSNumber)?.doubleValue ?? 1

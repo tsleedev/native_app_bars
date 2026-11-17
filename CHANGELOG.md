@@ -1,3 +1,8 @@
+## 0.1.0-dev.8
+
+- iOS leading icon actions can show an optional original-color avatar from bounded PNG bytes, with the configured icon as fallback.
+- iOS icon actions can opt into the existing action badge and provide a separate accessibility value. The value is available on supported iOS versions, and the visible native badge requires iOS 26 or later. Actions without the opt-in retain their previous behavior.
+
 ## 0.1.0-dev.7
 
 - Apply titles, actions, and interaction state to existing UIKit navigation bars and Android toolbars. Hosts keep ownership of their views, layout, lifecycle, and navigation.

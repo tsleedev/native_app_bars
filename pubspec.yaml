@@ -1,6 +1,6 @@
 name: native_app_bars
 description: Native UIKit and Android bars with Flutter fallback and Dart-owned navigation.
-version: 0.1.0-dev.7
+version: 0.1.0-dev.8
 homepage: https://github.com/tsleedev/native_app_bars
 repository: https://github.com/tsleedev/native_app_bars
 publish_to: none

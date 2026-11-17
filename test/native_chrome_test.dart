@@ -2297,6 +2297,100 @@ void main() {
       );
     });
 
+    test(
+      'iOS avatar snapshots caller bytes and enforces its payload bound',
+      () {
+        final original = Uint8List.fromList([1, 2, 3]);
+        final avatar = NativeChromeIOSAvatar(original);
+        original[0] = 255;
+        expect(avatar.png, [1, 2, 3]);
+        expect(() => avatar.png[0] = 4, throwsUnsupportedError);
+        expect(() => NativeChromeIOSAvatar(Uint8List(0)), throwsArgumentError);
+        expect(
+          () => NativeChromeIOSAvatar(Uint8List(65537)),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    for (final platform in [TargetPlatform.iOS, TargetPlatform.android]) {
+      testWidgets('opt-in iOS action fields preserve the wire on $platform', (
+        tester,
+      ) async {
+        debugDefaultTargetPlatformOverride = platform;
+        final data = NativeChromeIOSAvatar(Uint8List.fromList([1, 2, 3]));
+        final avatar = ValueNotifier<NativeChromeIOSAvatar?>(data);
+        addTearDown(avatar.dispose);
+        await tester.pumpWidget(
+          testApp(
+            controller: controller,
+            home: ValueListenableBuilder(
+              valueListenable: avatar,
+              builder: (context, value, child) => NativeChromeScaffold(
+                body: const SizedBox.expand(),
+                topBar: NativeTopBar(
+                  title: 'Home',
+                  leading: NativeBarAction(
+                    id: 'profile',
+                    label: 'Profile',
+                    icon: NativeChromeIcons.home,
+                    iosAvatar: value,
+                    onPressed: () {},
+                  ),
+                  actions: [
+                    const NativeBarAction(
+                      id: 'legacy',
+                      label: 'Legacy',
+                      badge: '3',
+                    ),
+                    NativeBarAction(
+                      id: 'inbox',
+                      label: 'Inbox',
+                      badge: '5',
+                      iosBadgeAccessibilityValue: '5 unread',
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = host.top!;
+        final leading = first['leading'] as Map;
+        final actions = first['actions'] as List;
+        expect((actions.first as Map)['badge'], '3');
+        expect(
+          (actions.first as Map).containsKey('iosBadgeAccessibilityValue'),
+          false,
+        );
+        if (platform == TargetPlatform.iOS) {
+          expect(leading['iosAvatarPNG'], [1, 2, 3]);
+          expect(
+            (actions.last as Map)['iosBadgeAccessibilityValue'],
+            '5 unread',
+          );
+        } else {
+          expect(leading.containsKey('iosAvatarPNG'), false);
+          expect(leading.containsKey('iosAvatarVersion'), false);
+          expect(
+            (actions.last as Map).containsKey('iosBadgeAccessibilityValue'),
+            false,
+          );
+        }
+        avatar.value = null;
+        await tester.pumpAndSettle();
+        expect(
+          (host.top!['leading'] as Map).containsKey('iosAvatarPNG'),
+          false,
+        );
+        expect(host.top!['ownerToken'], first['ownerToken']);
+        expect(host.top!['routeSession'], first['routeSession']);
+        debugDefaultTargetPlatformOverride = null;
+      });
+    }
+
     testWidgets('Flutter renderer shows the badge on the icon', (tester) async {
       await tester.pumpWidget(
         MaterialApp(

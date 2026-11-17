@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -65,6 +66,23 @@ abstract final class NativeChromeIcons {
   );
 }
 
+/// Local PNG for the leading action on the iOS native top bar.
+///
+/// The host accepts images no larger than 128×128. Missing, invalid or
+/// unsupported images use the action's regular icon. No network lookup occurs.
+final class NativeChromeIOSAvatar {
+  NativeChromeIOSAvatar(Uint8List png) : png = _copy(png);
+
+  final Uint8List png;
+
+  static Uint8List _copy(Uint8List source) {
+    if (source.isEmpty || source.length > 64 * 1024) {
+      throw ArgumentError('Avatar PNG must contain 1–65536 bytes.');
+    }
+    return Uint8List.fromList(source).asUnmodifiableView();
+  }
+}
+
 /// Callback for bar actions. Returning a [Future] marks the owning bar busy
 /// until it completes; further actions from that bar are rejected meanwhile.
 typedef NativeChromeCallback = FutureOr<void> Function();
@@ -93,6 +111,8 @@ class NativeBarAction {
     this.loading = false,
     this.style = NativeBarActionStyle.icon,
     this.badge,
+    this.iosBadgeAccessibilityValue,
+    this.iosAvatar,
     this.androidOverflowIfRoom = false,
   });
 
@@ -105,6 +125,8 @@ class NativeBarAction {
       loading = false,
       style = NativeBarActionStyle.icon,
       badge = null,
+      iosBadgeAccessibilityValue = null,
+      iosAvatar = null,
       androidOverflowIfRoom = false;
 
   /// Close button for modal pages.
@@ -116,6 +138,8 @@ class NativeBarAction {
       loading = false,
       style = NativeBarActionStyle.icon,
       badge = null,
+      iosBadgeAccessibilityValue = null,
+      iosAvatar = null,
       androidOverflowIfRoom = false;
 
   /// Stable identifier. The same id must keep the same meaning within a page;
@@ -137,9 +161,17 @@ class NativeBarAction {
   /// short text (for example `99+`) is shown as given, null shows nothing.
   /// Put the meaning in [label] too (for example "Inbox, 3 unread"): the
   /// badge itself is visual. Optional wire field, sent only when set.
-  /// Rendered by the Android host and the Flutter renderer; the iOS host does
-  /// not show it (UIKit bar items keep their icon).
+  /// Rendered by the Android host and the Flutter renderer. An iOS leading
+  /// or trailing icon action opts in with [iosBadgeAccessibilityValue].
   final String? badge;
+
+  /// Nonempty localized accessibility value that opts the iOS native icon
+  /// action into [badge]. iOS 26+ also displays the badge visually.
+  /// Omitting this value preserves the existing iOS behavior.
+  final String? iosBadgeAccessibilityValue;
+
+  /// Optional original-color image for an iOS native leading icon action.
+  final NativeChromeIOSAvatar? iosAvatar;
 
   /// Lets the Android top toolbar move this trailing action into overflow
   /// when space is limited. Other renderers and loading actions are unchanged.

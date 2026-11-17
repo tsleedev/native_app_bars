@@ -35,6 +35,8 @@ class ChromeOwner {
   /// Incremented only when the wire content actually changes.
   int semanticRevision = 0;
 
+  NativeChromeIOSAvatar? _iosAvatar;
+  int _iosAvatarVersion = 0;
   String? _contentJson;
   Map<String, Object?>? _content;
 
@@ -344,6 +346,31 @@ class NativeChromeController extends ChangeNotifier
     for (final action in [?leading, ?bar.titleAction, ...bar.actions]) {
       if (action.icon != null) rememberIcon(action.icon!);
     }
+    final ios = defaultTargetPlatform == TargetPlatform.iOS && native;
+    final avatar = ios && leading?.style == NativeBarActionStyle.icon
+        ? leading?.iosAvatar
+        : null;
+    if (!identical(avatar, owner._iosAvatar)) {
+      owner._iosAvatar = avatar;
+      owner._iosAvatarVersion++;
+    }
+    Map<String, Object?>? actionWire(NativeBarAction? action) {
+      if (action == null) return null;
+      final wire = action.toWire();
+      if (ios && action.style == NativeBarActionStyle.icon) {
+        final badgeValue = action.iosBadgeAccessibilityValue;
+        if (action.badge != null &&
+            badgeValue != null &&
+            badgeValue.isNotEmpty) {
+          wire['iosBadgeAccessibilityValue'] = badgeValue;
+        }
+      }
+      return wire;
+    }
+
+    final leadingWire = actionWire(leading);
+    if (avatar != null)
+      leadingWire!['iosAvatarVersion'] = owner._iosAvatarVersion;
     _setContent(owner, <String, Object?>{
       'title': bar.title,
       'presentation': bar.presentation.name,
@@ -353,8 +380,8 @@ class NativeChromeController extends ChangeNotifier
       'titleAction': bar.titleAction?.toWire(),
       'background': bar.backgroundColor?.toARGB32(),
       'foreground': bar.foregroundColor?.toARGB32(),
-      'leading': leading?.toWire(),
-      'actions': <Object?>[for (final a in bar.actions) a.toWire()],
+      'leading': leadingWire,
+      'actions': <Object?>[for (final a in bar.actions) actionWire(a)],
     });
   }
 
@@ -771,6 +798,13 @@ class NativeChromeController extends ChangeNotifier
     state['stateRevision'] = ++_stateRevision;
     if (!nativeAvailable || _lease == null) return;
     _ensureIcons(state);
+    final avatar = top?._iosAvatar;
+    final wireTop = state['top'];
+    if (avatar != null && wireTop is Map<String, Object?>) {
+      final leading = wireTop['leading'] as Map<String, Object?>;
+      // Keep image bytes out of the state signature and the glyph collector.
+      wireTop['leading'] = {...leading, 'iosAvatarPNG': avatar.png};
+    }
     unawaited(_transport.update(state));
   }
 
