@@ -225,6 +225,24 @@ class NativeChromeController extends ChangeNotifier
     _markDirty();
   }
 
+  List<RRect> _iosPopupForegrounds = const [];
+  Size _iosPopupViewport = Size.zero;
+
+  void updateIOSPopupForegrounds(List<RRect> surfaces, Size viewport) {
+    final next = surfaces
+        .where((surface) => surface.isFinite && !surface.isEmpty)
+        .take(16)
+        .map((surface) => surface.scaleRadii())
+        .toList(growable: false);
+    if (viewport == _iosPopupViewport &&
+        listEquals(next, _iosPopupForegrounds)) {
+      return;
+    }
+    _iosPopupForegrounds = next;
+    _iosPopupViewport = viewport;
+    _markDirty();
+  }
+
   Map<String, Object?> _appearance = const <String, Object?>{};
   bool _rtl = false;
   double _devicePixelRatio = 1;
@@ -347,7 +365,10 @@ class NativeChromeController extends ChangeNotifier
       if (action.icon != null) rememberIcon(action.icon!);
     }
     final ios = defaultTargetPlatform == TargetPlatform.iOS && native;
-    final avatar = ios && leading?.style == NativeBarActionStyle.icon
+    final avatar =
+        ios &&
+            leading?.style == NativeBarActionStyle.icon &&
+            leading?.iosSystemItem == null
         ? leading?.iosAvatar
         : null;
     if (!identical(avatar, owner._iosAvatar)) {
@@ -358,6 +379,10 @@ class NativeChromeController extends ChangeNotifier
       if (action == null) return null;
       final wire = action.toWire();
       if (ios && action.style == NativeBarActionStyle.icon) {
+        final systemItem = action.iosSystemItem;
+        if (systemItem != null && !action.loading) {
+          wire['iosSystemItem'] = systemItem.name;
+        }
         final badgeValue = action.iosBadgeAccessibilityValue;
         if (action.badge != null &&
             badgeValue != null &&
@@ -375,6 +400,10 @@ class NativeChromeController extends ChangeNotifier
       'title': bar.title,
       'presentation': bar.presentation.name,
       'titleAlignment': bar.titleAlignment.name,
+      if (bar.iosLeadingTitleAccessory case final String accessory when ios)
+        'iosLeadingTitleAccessory': accessory,
+      if (bar.iosSubtitle case final String subtitle when ios)
+        'iosSubtitle': subtitle,
       'pinFirstAction': bar.pinFirstAction,
       if (bar.effectiveOpacity != 1) 'opacity': bar.effectiveOpacity,
       'titleAction': bar.titleAction?.toWire(),
@@ -778,6 +807,33 @@ class NativeChromeController extends ChangeNotifier
           : null,
       'bottomTransition': ?_bottomPresentationWire(),
       'suspended': suspended,
+      if (popupSuspended &&
+          !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.iOS &&
+          _iosPopupViewport.isFinite &&
+          !_iosPopupViewport.isEmpty &&
+          _iosPopupForegrounds.isNotEmpty)
+        'iosPopupForegrounds': {
+          'width': _iosPopupViewport.width,
+          'height': _iosPopupViewport.height,
+          'surfaces': [
+            for (final surface in _iosPopupForegrounds)
+              [
+                surface.left,
+                surface.top,
+                surface.width,
+                surface.height,
+                surface.tlRadiusX,
+                surface.tlRadiusY,
+                surface.trRadiusX,
+                surface.trRadiusY,
+                surface.brRadiusX,
+                surface.brRadiusY,
+                surface.blRadiusX,
+                surface.blRadiusY,
+              ],
+          ],
+        },
       if (_androidWindowInactive && !popupSuspended)
         'androidWindowInactive': true,
       'dim': popupSuspended && _config.dimDuringSuspension && dimColor != null

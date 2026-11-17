@@ -142,6 +142,47 @@ Wrap the navigator in `NativeChrome` using `MaterialApp.builder` and put
 [main.dart](example/lib/main.dart) shows the complete setup and a detail
 route with an implied back action.
 
+For iOS screens with native chrome, use one shared host for the top bar,
+tab bar and their transitions. Keep route semantics and action callbacks in
+the app. Record the affected routes, reason, fallback and verification for
+any platform or system surface that requires a separate host.
+
+For an iOS-native leading or trailing icon action, `iosSystemItem` can select
+a standard UIKit close, save, edit or add item. Set an accessibility label and
+a fallback icon. Other renderers use the fallback icon. Loading and text
+actions keep their usual presentation.
+
+On iOS, set the host's `leadingTitleAccessoryProvider` for noninteractive
+branding and select it through `iosLeadingTitleAccessory`. Use `iosSubtitle`
+for a second line. The shared host lays out both during route transitions.
+When Flutter paints opaque popup surfaces over the native bars, set
+`NativeChrome.iosPopupForegrounds` to their rounded rectangles in the root
+viewport's logical coordinates. The host clips paint only while suspended,
+including moving bars. Pass updated rectangles while the popup animates and
+an empty list on completion. An app with a custom modal lifetime can wrap its
+content in `NativeChromeSuspension` until the last surface has gone.
+
+After a live lease reports measurements, `geometry.iosTopBarFrame` gives the
+visible UIKit bar's resting rect in Flutter coordinates. Use `topBarRect` for
+the full document band, including the status area. Read
+`iosReduceTransparency` when choosing a document backdrop. Older hosts and
+hidden bars can omit these optional measurements. Keep the current Flutter
+layout until valid measurements arrive.
+
+For an embedded iOS segment or modal toolbar, register
+`NativeChromeInlineToolbarFactory` with the Flutter registrar and keep the
+platform-view ID and channel namespace consistent with its Flutter client.
+The view starts inert and mirrors the active state of its current descriptor.
+Keep the Flutter route, callbacks and fallback in the app. Use the shared
+window host for page-level chrome.
+
+For an already presented UIKit sheet, use
+`NativeChromePresentedNavigationController` on the main actor.
+Call `updateToolbar` whenever the top content or its title, prompt, or
+actions change. The app owns sheet presentation, content, authorization and
+dismissal. UIKit drives the sheet transition and the toolbar discards
+callbacks after the current navigation item changes.
+
 ### Android native tab customization
 
 | Control | API and behavior |

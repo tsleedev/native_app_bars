@@ -46,6 +46,14 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
   /// the content view controller stays attached once and is never moved.
   public var navigationBar: UINavigationBar { chromeNavigationController.navigationBar }
   public let chromeNavigationController: UINavigationController
+
+  /// An optional app-supplied, noninteractive title decoration, scoped to
+  /// this host. Set before installing the host in its window. Returning nil
+  /// uses the normal title. The app creates a fresh view each time, and the
+  /// package owns UIKit placement, snapshots and transitions.
+  public var leadingTitleAccessoryProvider: ((String) -> UIView?)?
+  private let popupTopPaint = NativeChromePaintContainer()
+  private let popupBottomPaint = NativeChromePaintContainer()
   private let chromeContainer = NativeChromePassThroughView()
   public let tabBar = UITabBar()
   private let topDim = UIView()
@@ -170,15 +178,25 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       dim.alpha = 0
       dim.isAccessibilityElement = false
     }
-    view.addSubview(chromeContainer)
+    for paint in [popupTopPaint, popupBottomPaint] {
+      paint.frame = view.bounds
+      paint.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      view.addSubview(paint)
+    }
+    popupTopPaint.addSubview(chromeContainer)
     chromeNavigationController.didMove(toParent: self)
-    view.addSubview(tabBar)
+    popupBottomPaint.addSubview(tabBar)
     // Compose solid chrome + its popup dim, then apply chromeContainer's
     // opacity once. A sibling dim would also repaint Flutter underneath.
     chromeContainer.layer.allowsGroupOpacity = true
     chromeContainer.addSubview(topDim)
-    view.addSubview(bottomDim)
-    if registerWithHub { NativeChromeHub.shared.hostDidInstall(self) }
+    popupBottomPaint.addSubview(bottomDim)
+    if registerWithHub {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(transparencyPreferenceChanged),
+        name: UIAccessibility.reduceTransparencyStatusDidChangeNotification, object: nil)
+      NativeChromeHub.shared.hostDidInstall(self)
+    }
   }
 
   // Let Flutter keep control of system UI.
@@ -190,6 +208,10 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
   }
 
   public func position(for bar: UIBarPositioning) -> UIBarPosition { .topAttached }
+
+  @objc private func transparencyPreferenceChanged() { publishGeometry() }
+
+  deinit { NotificationCenter.default.removeObserver(self) }
 
   // MARK: Layout and geometry
 
@@ -218,6 +240,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     bottomDim.bounds = tabBar.bounds
     bottomDim.center = tabBar.center
     applyBottomPresentation()
+    applyPopupForeground()
     if let snapshot = transitionSnapshot {
       snapshot.frame.size.width = bounds.width
     }
@@ -368,8 +391,15 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
 
   public func geometry() -> [String: Any] {
     let safe = view.safeAreaInsets
+    let topFrame = navigationBar.convert(navigationBar.bounds, to: chromeContainer)
+    let barVisible = !navigationBar.isHidden && topFrame.width > 0 && topFrame.height > 0
     return [
       "hostInstalled": true,
+      "iosReduceTransparency": UIAccessibility.isReduceTransparencyEnabled,
+      "iosTopBarFrame": barVisible
+        ? ["left": Double(topFrame.minX), "top": Double(topFrame.minY),
+           "width": Double(topFrame.width), "height": Double(topFrame.height)] as Any
+        : NSNull(),
       "topInset": Double(safe.top),
       "topBarHeight": Double(max(0, topBarBottom() - safe.top)),
       "topBarVisible": !navigationBar.isHidden,
@@ -425,6 +455,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     endTransition()
     restoreForegroundDim()
     state = nil
+    applyPopupForeground()
     applyBottomPresentation()
     appliedTop = nil
     appliedTopKey = nil
@@ -460,6 +491,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     }
     defer { if atomicBottom { CATransaction.commit() } }
     state = next
+    applyPopupForeground()
     let appearance = next.appearance
     let style: UIUserInterfaceStyle = appearance.dark ? .dark : .light
     // The top bar's style is per bar (applyTop).
@@ -551,6 +583,9 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     } else if top.titleAction != nil {
       item.title = nil
       item.titleView = titleButton(top, foreground: foreground, expanded: false)
+    } else if let subtitle = top.iosSubtitle {
+      item.title = nil
+      item.titleView = subtitleTitle(top.title, subtitle: subtitle, foreground: foreground)
     } else {
       item.titleView = nil
       item.title = top.title
@@ -608,9 +643,38 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     return button
   }
 
+  private func subtitleTitle(_ title: String, subtitle: String, foreground: UIColor?) -> UIView {
+    let labels: [UIView] = [(title, UIFont.TextStyle.headline), (subtitle, .caption1)].map { text, style in
+      let label = UILabel()
+      label.text = text
+      label.font = .preferredFont(forTextStyle: style)
+      label.adjustsFontForContentSizeCategory = true
+      label.textColor = foreground ?? .label
+      label.isAccessibilityElement = false
+      return label
+    }
+    let stack = UIStackView(arrangedSubviews: labels)
+    stack.axis = .vertical
+    stack.alignment = .center
+    stack.isAccessibilityElement = true
+    stack.accessibilityLabel = title + ", " + subtitle
+    stack.accessibilityTraits = .header
+    stack.isUserInteractionEnabled = false
+    return stack
+  }
+
   private func titleItem(_ top: NativeChromeTopSpec, foreground: UIColor?) -> UIBarButtonItem {
-    let button = titleButton(top, foreground: foreground, expanded: top.titleAlignment == "expandedLeading")
-    let item = UIBarButtonItem(customView: button)
+    let view: UIView
+    if top.titleAlignment == "leading", top.titleAction == nil,
+      let id = top.iosLeadingTitleAccessory, let accessory = leadingTitleAccessoryProvider?(id) {
+      accessory.isUserInteractionEnabled = false
+      view = accessory
+    } else if top.titleAction == nil, let subtitle = top.iosSubtitle {
+      view = subtitleTitle(top.title, subtitle: subtitle, foreground: foreground)
+    } else {
+      view = titleButton(top, foreground: foreground, expanded: top.titleAlignment == "expandedLeading")
+    }
+    let item = UIBarButtonItem(customView: view)
     item.isEnabled = top.titleAction?.enabled ?? true
     if #available(iOS 26.0, *) { item.hidesSharedBackground = true }
     if #available(iOS 27.1, *) { item.axisBehavior = .horizontalOnly }
@@ -643,6 +707,17 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       return item
     }
     let stamp = top.stamp
+    if let systemItem = action.iosSystemItem {
+      let item = UIBarButtonItem(systemItem: systemItem, primaryAction: UIAction { [weak self] _ in
+        self?.emitTop(action, stamp: stamp)
+      })
+      item.accessibilityLabel = action.label
+      item.accessibilityIdentifier = identifier
+      item.isEnabled = action.enabled
+      item.tintColor = foreground
+      updateAccessories(item, action: action, previous: nil)
+      return item
+    }
     let image = action.style == "icon" ? NativeChromeHub.shared.icon(for: action.icon) : nil
     let item = NativeChromeBarButton.button(
       label: action.label, image: image, identifier: identifier, enabled: action.enabled,
@@ -810,6 +885,21 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     let items = tabBar.items ?? []
     if let confirmed = confirmedTabId, let index = tabIds.firstIndex(of: confirmed), index < items.count {
       if tabBar.selectedItem !== items[index] { tabBar.selectedItem = items[index] }
+    }
+  }
+
+  private func applyPopupForeground() {
+    let bounds = view.bounds
+    let path = state?.iosPopupForeground?.visiblePath(in: bounds)
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    defer { CATransaction.commit() }
+    for paint in [popupTopPaint, popupBottomPaint] {
+      guard let path else { paint.layer.mask = nil; continue }
+      let mask = (paint.layer.mask as? CAShapeLayer) ?? CAShapeLayer()
+      mask.frame = paint.bounds
+      mask.path = path
+      paint.layer.mask = mask
     }
   }
 
@@ -1057,9 +1147,9 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       }
       for outgoing in [snapshot, railSnapshot].compactMap({ $0 }) {
         if direction == "push" && style == "slide" {
-          view.insertSubview(outgoing, belowSubview: chromeContainer)
+          popupTopPaint.insertSubview(outgoing, belowSubview: chromeContainer)
         } else {
-          view.insertSubview(outgoing, aboveSubview: chromeContainer)
+          popupTopPaint.insertSubview(outgoing, aboveSubview: chromeContainer)
         }
       }
       // A fade route can hide (or reveal) the tab bar: keep its look so it
@@ -1072,7 +1162,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
         tabView.isUserInteractionEnabled = false
         tabView.accessibilityElementsHidden = true
         tabView.alpha = 0
-        view.insertSubview(tabView, aboveSubview: tabBar)
+        popupBottomPaint.insertSubview(tabView, aboveSubview: tabBar)
         transitionTabSnapshot = tabView
       }
       transitionSnapshot = snapshot
@@ -1195,5 +1285,13 @@ final class NativeChromePassThroughView: UIView {
       current = candidate.superview
     }
     return nil
+  }
+}
+
+/// A paint mask stays outside the independently transformed bar/snapshots.
+private final class NativeChromePaintContainer: UIView {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    let hit = super.hitTest(point, with: event)
+    return hit === self ? nil : hit
   }
 }

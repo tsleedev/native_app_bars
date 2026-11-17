@@ -26,10 +26,12 @@ public struct NativeChromeActionSpec: Equatable {
   let iosBadge: String?
   let iosBadgeAccessibilityValue: String?
   let iosAvatarPNG: Data?
+  let iosSystemItem: UIBarButtonItem.SystemItem?
 
   func hasSameControl(as other: NativeChromeActionSpec) -> Bool {
     id == other.id && label == other.label && icon == other.icon &&
-      enabled == other.enabled && loading == other.loading && style == other.style
+      enabled == other.enabled && loading == other.loading && style == other.style &&
+      iosSystemItem == other.iosSystemItem
   }
 
   init?(_ value: Any?, allowsAvatar: Bool = false) {
@@ -40,6 +42,17 @@ public struct NativeChromeActionSpec: Equatable {
     self.enabled = map["enabled"] as? Bool ?? false
     self.loading = map["loading"] as? Bool ?? false
     self.style = map["style"] as? String ?? "icon"
+    if style == "icon", !loading {
+      switch map["iosSystemItem"] as? String {
+      case "close": iosSystemItem = .close
+      case "save": iosSystemItem = .save
+      case "edit": iosSystemItem = .edit
+      case "add": iosSystemItem = .add
+      default: iosSystemItem = nil
+      }
+    } else {
+      iosSystemItem = nil
+    }
     let badge = map["badge"] as? String
     let value = map["iosBadgeAccessibilityValue"] as? String
     if style == "icon", !loading, let badge, badge.utf16.count <= 16,
@@ -50,7 +63,7 @@ public struct NativeChromeActionSpec: Equatable {
       iosBadge = nil
       iosBadgeAccessibilityValue = nil
     }
-    if allowsAvatar, style == "icon", !loading,
+    if allowsAvatar, style == "icon", !loading, iosSystemItem == nil,
       let data = map["iosAvatarPNG"] as? FlutterStandardTypedData,
       (1...65536).contains(data.data.count) {
       iosAvatarPNG = data.data
@@ -87,6 +100,8 @@ public struct NativeChromeTopSpec: Equatable {
   /// platform | leading | expandedLeading
   public let titleAlignment: String
   public let titleAction: NativeChromeActionSpec?
+  let iosLeadingTitleAccessory: String?
+  let iosSubtitle: String?
   public let background: UIColor?
   public let foreground: UIColor?
   public let leading: NativeChromeActionSpec?
@@ -101,6 +116,7 @@ public struct NativeChromeTopSpec: Equatable {
     stamp.ownerToken == other.stamp.ownerToken && stamp.routeSession == other.stamp.routeSession
       && title == other.title && presentation == other.presentation
       && titleAlignment == other.titleAlignment && titleAction == other.titleAction
+      && iosLeadingTitleAccessory == other.iosLeadingTitleAccessory && iosSubtitle == other.iosSubtitle
       && background == other.background && foreground == other.foreground
       && (leading.map { action in other.leading.map { action.hasSameControl(as: $0) } ?? false }
           ?? (other.leading == nil))
@@ -116,6 +132,9 @@ public struct NativeChromeTopSpec: Equatable {
     presentation = map["presentation"] as? String ?? "opaque"
     titleAlignment = map["titleAlignment"] as? String ?? "platform"
     titleAction = NativeChromeActionSpec(map["titleAction"])
+    let accessory = map["iosLeadingTitleAccessory"] as? String
+    iosLeadingTitleAccessory = accessory.flatMap { (1...64).contains($0.utf16.count) ? $0 : nil }
+    iosSubtitle = (map["iosSubtitle"] as? String).flatMap { (1...512).contains($0.utf16.count) ? $0 : nil }
     background = NativeChromeAppearanceSpec.color(map["background"])
     foreground = NativeChromeAppearanceSpec.color(map["foreground"])
     leading = NativeChromeActionSpec(map["leading"], allowsAvatar: true)
@@ -228,6 +247,64 @@ struct NativeChromeBottomPresentation: Equatable {
   }
 }
 
+struct NativeChromePopupForeground: Equatable {
+  let viewport: CGSize
+  let surfaces: [[CGFloat]]
+
+  init?(_ value: Any?) {
+    guard let map = value as? [String: Any],
+      let width = (map["width"] as? NSNumber)?.doubleValue,
+      let height = (map["height"] as? NSNumber)?.doubleValue,
+      width.isFinite, height.isFinite, width > 0, height > 0,
+      let raw = map["surfaces"] as? [[NSNumber]]
+    else { return nil }
+    viewport = CGSize(width: width, height: height)
+    surfaces = raw.prefix(16).compactMap { values in
+      let v = values.map { CGFloat($0.doubleValue) }
+      guard v.count == 12, v.allSatisfy({ $0.isFinite }), v[2] > 0, v[3] > 0,
+        (v[0] + v[2]).isFinite, (v[1] + v[3]).isFinite,
+        v.dropFirst(4).allSatisfy({ $0 >= 0 }),
+        v[4]+v[6] <= v[2]+0.01, v[8]+v[10] <= v[2]+0.01,
+        v[5]+v[11] <= v[3]+0.01, v[7]+v[9] <= v[3]+0.01
+      else { return nil }
+      return v
+    }
+    if surfaces.isEmpty { return nil }
+  }
+
+  func visiblePath(in bounds: CGRect) -> CGPath? {
+    guard abs(bounds.width - viewport.width) < 0.5,
+      abs(bounds.height - viewport.height) < 0.5 else { return nil }
+    var path = CGPath(rect: bounds, transform: nil)
+    for v in surfaces {
+      let r = CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+      guard r.intersects(bounds) else { continue }
+      let cutout = CGMutablePath()
+      let k: CGFloat = 0.5522847498
+      cutout.move(to: CGPoint(x: r.minX + v[4], y: r.minY))
+      cutout.addLine(to: CGPoint(x: r.maxX - v[6], y: r.minY))
+      cutout.addCurve(to: CGPoint(x: r.maxX, y: r.minY + v[7]),
+        control1: CGPoint(x: r.maxX - v[6] * (1-k), y: r.minY),
+        control2: CGPoint(x: r.maxX, y: r.minY + v[7] * (1-k)))
+      cutout.addLine(to: CGPoint(x: r.maxX, y: r.maxY - v[9]))
+      cutout.addCurve(to: CGPoint(x: r.maxX - v[8], y: r.maxY),
+        control1: CGPoint(x: r.maxX, y: r.maxY - v[9] * (1-k)),
+        control2: CGPoint(x: r.maxX - v[8] * (1-k), y: r.maxY))
+      cutout.addLine(to: CGPoint(x: r.minX + v[10], y: r.maxY))
+      cutout.addCurve(to: CGPoint(x: r.minX, y: r.maxY - v[11]),
+        control1: CGPoint(x: r.minX + v[10] * (1-k), y: r.maxY),
+        control2: CGPoint(x: r.minX, y: r.maxY - v[11] * (1-k)))
+      cutout.addLine(to: CGPoint(x: r.minX, y: r.minY + v[5]))
+      cutout.addCurve(to: CGPoint(x: r.minX + v[4], y: r.minY),
+        control1: CGPoint(x: r.minX, y: r.minY + v[5] * (1-k)),
+        control2: CGPoint(x: r.minX + v[4] * (1-k), y: r.minY))
+      cutout.closeSubpath()
+      path = path.subtracting(cutout)
+    }
+    return path
+  }
+}
+
 public struct NativeChromeStateSpec: Equatable {
   /// Connection lease (protocol 2). Revisions are only compared within it.
   public let lease: String
@@ -239,6 +316,7 @@ public struct NativeChromeStateSpec: Equatable {
   // closed; it must not turn a partial root into a fully exposed native tab.
   let bottomPresentationRequested: Bool
   public let suspended: Bool
+  let iosPopupForeground: NativeChromePopupForeground?
   public let dimColor: UIColor?
   public let dimDuration: TimeInterval
   public let rtl: Bool
@@ -256,6 +334,7 @@ public struct NativeChromeStateSpec: Equatable {
     bottomPresentation = NativeChromeBottomPresentation(map["bottomTransition"])
     bottomPresentationRequested = map["bottomTransition"] != nil && !(map["bottomTransition"] is NSNull)
     suspended = map["suspended"] as? Bool ?? false
+    iosPopupForeground = suspended ? NativeChromePopupForeground(map["iosPopupForegrounds"]) : nil
     let dim = map["dim"] as? [String: Any]
     dimColor = NativeChromeAppearanceSpec.color(dim?["color"])
     dimDuration = Double((dim?["durationMs"] as? NSNumber)?.intValue ?? 0) / 1000

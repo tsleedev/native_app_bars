@@ -1,3 +1,11 @@
+## 0.1.0-dev.9
+
+- Let shared iOS hosts exclude measured opaque Flutter popup surfaces from native chrome paint while suspended.
+- iOS hosts can render a leading title accessory and a subtitle, and expose optional resting bar geometry and the Reduce Transparency preference.
+- Share the UIKit renderers for an inline segmented control or modal toolbar and for an already presented sheet.
+- Select a standard iOS system item for an icon action. Keep the existing fallback icon behavior.
+- Recompute iOS chrome visibility when an enclosing visibility scope changes around retained content.
+
 ## 0.1.0-dev.8
 
 - iOS leading icon actions can show an optional original-color avatar from bounded PNG bytes, with the configured icon as fallback.

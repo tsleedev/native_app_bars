@@ -100,6 +100,9 @@ enum NativeBarActionStyle {
   done,
 }
 
+/// A standard UIKit bar button for a native iOS toolbar.
+enum NativeBarActionIOSSystemItem { close, save, edit, add }
+
 @immutable
 class NativeBarAction {
   const NativeBarAction({
@@ -113,6 +116,7 @@ class NativeBarAction {
     this.badge,
     this.iosBadgeAccessibilityValue,
     this.iosAvatar,
+    this.iosSystemItem,
     this.androidOverflowIfRoom = false,
   });
 
@@ -127,6 +131,7 @@ class NativeBarAction {
       badge = null,
       iosBadgeAccessibilityValue = null,
       iosAvatar = null,
+      iosSystemItem = null,
       androidOverflowIfRoom = false;
 
   /// Close button for modal pages.
@@ -140,6 +145,7 @@ class NativeBarAction {
       badge = null,
       iosBadgeAccessibilityValue = null,
       iosAvatar = null,
+      iosSystemItem = null,
       androidOverflowIfRoom = false;
 
   /// Stable identifier. The same id must keep the same meaning within a page;
@@ -172,6 +178,11 @@ class NativeBarAction {
 
   /// Optional original-color image for an iOS native leading icon action.
   final NativeChromeIOSAvatar? iosAvatar;
+
+  /// Optional UIKit system item for a leading or trailing icon action.
+  /// Native iOS uses the system presentation and keeps [label] for
+  /// accessibility. Other renderers use [icon] as usual.
+  final NativeBarActionIOSSystemItem? iosSystemItem;
 
   /// Lets the Android top toolbar move this trailing action into overflow
   /// when space is limited. Other renderers and loading actions are unchanged.
@@ -229,6 +240,8 @@ class NativeTopBar {
     this.presentation = NativeTopBarPresentation.opaque,
     this.titleAlignment = NativeTopBarTitleAlignment.platform,
     this.titleAction,
+    this.iosLeadingTitleAccessory,
+    this.iosSubtitle,
     this.backgroundColor,
     this.foregroundColor,
     this.pinFirstAction = false,
@@ -247,6 +260,15 @@ class NativeTopBar {
   /// accessibility label; the visible text is [title].
   final NativeBarAction? titleAction;
   final NativeTopBarTitleAlignment titleAlignment;
+
+  /// Identifier for an app-provided, noninteractive UIKit leading title view.
+  /// Requires [titleAlignment] to be leading and no [titleAction]. If the
+  /// native host omits the provider or identifier, it displays [title] normally.
+  final String? iosLeadingTitleAccessory;
+
+  /// Optional subtitle using native iOS typography beneath [title].
+  /// Its accessibility label is combined with the title.
+  final String? iosSubtitle;
 
   /// Per-page bar colours; null uses `NativeChrome.appearance`.
   final Color? backgroundColor;

@@ -27,6 +27,7 @@ class NativeChrome extends StatefulWidget {
     this.appearance,
     this.controller,
     this.popupOpacity,
+    this.iosPopupForegrounds = const [],
     required this.child,
   });
 
@@ -42,6 +43,11 @@ class NativeChrome extends StatefulWidget {
   /// dimming. Zero is a transparent modal; input/AX suspension is independent.
   /// Finite values clamp to 0..1; non-finite values use the null default.
   final double? popupOpacity;
+
+  /// Opaque Flutter popup surfaces in the root viewport's logical coordinates.
+  /// While suspended, the shared iOS host excludes these areas from native
+  /// bar paint, including moving bars. Hit testing and layout stay unchanged.
+  final List<RRect> iosPopupForegrounds;
   final Widget child;
 
   /// The controller of the nearest [NativeChrome]; rebuilds the caller when
@@ -97,6 +103,7 @@ class _NativeChromeState extends State<NativeChrome> {
   /// bars disappear with this widget and their owner may attach them again.
   void _releaseController() {
     _controller.popupOpacity = null;
+    _controller.updateIOSPopupForegrounds(const [], Size.zero);
     if (_ownsController) {
       _controller.dispose();
     } else {
@@ -113,6 +120,12 @@ class _NativeChromeState extends State<NativeChrome> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      _controller.updateIOSPopupForegrounds(
+        widget.iosPopupForegrounds,
+        MediaQuery.maybeSizeOf(context) ?? Size.zero,
+      );
+    }
     _controller.updateEnvironment(
       appearance: NativeChromeAppearance.resolve(
         widget.appearance,
@@ -299,17 +312,23 @@ class NativeChromeVisibility extends InheritedWidget {
   final bool visible;
 
   static bool of(BuildContext context) {
+    final observeAncestors =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     var visible = true;
     context.visitAncestorElements((element) {
       final widget = element.widget;
-      if (widget is NativeChromeVisibility && !widget.visible) {
-        visible = false;
-        return false;
+      if (widget is! NativeChromeVisibility) return true;
+      // A retained route can have its own unchanged visibility scope inside
+      // an enclosing scope that closes, e.g. when its parent is covered.
+      if (observeAncestors && element is InheritedElement) {
+        context.dependOnInheritedElement(element);
       }
-      return true;
+      visible = visible && widget.visible;
+      return observeAncestors || visible;
     });
-    // Register a dependency on the nearest scope so changes rebuild.
-    context.dependOnInheritedWidgetOfExactType<NativeChromeVisibility>();
+    if (!observeAncestors) {
+      context.dependOnInheritedWidgetOfExactType<NativeChromeVisibility>();
+    }
     return visible;
   }
 

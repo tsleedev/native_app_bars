@@ -28,6 +28,8 @@ class NativeChromeGeometry {
     this.occlusionSupported = false,
     this.occlusionRegions = const <Rect>[],
     this.hiddenActionSlot,
+    this.iosTopBarFrame,
+    this.iosReduceTransparency,
   });
 
   factory NativeChromeGeometry.fromWire(Map<Object?, Object?> data) {
@@ -49,8 +51,19 @@ class NativeChromeGeometry {
       final r = Rect.fromLTWH(v('left'), v('top'), v('width'), v('height'));
       if (r.isFinite && !r.isEmpty) slot = r;
     }
+    final rawBar = data['iosTopBarFrame'];
+    Rect? barFrame;
+    if (rawBar is Map) {
+      double v(String key) => (rawBar[key] as num?)?.toDouble() ?? 0;
+      final r = Rect.fromLTWH(v('left'), v('top'), v('width'), v('height'));
+      if (r.isFinite && !r.isEmpty) barFrame = r;
+    }
     return NativeChromeGeometry(
       hiddenActionSlot: slot,
+      iosTopBarFrame: barFrame,
+      iosReduceTransparency: data['iosReduceTransparency'] is bool
+          ? data['iosReduceTransparency'] as bool
+          : null,
       occlusionSupported: occlusion is Map && occlusion['supported'] == true,
       occlusionRegions: List<Rect>.unmodifiable(regions),
       topInset: d('topInset'),
@@ -98,6 +111,13 @@ class NativeChromeGeometry {
   /// settings button on a full-bleed page, including foldable rails).
   final Rect? hiddenActionSlot;
 
+  /// The visible UIKit bar's neutral frame in Flutter coordinates.
+  /// Transition masks and transforms leave this resting geometry unchanged.
+  final Rect? iosTopBarFrame;
+
+  /// The current UIKit Reduce Transparency preference, when available.
+  final bool? iosReduceTransparency;
+
   /// Rect of the top bar (including the status area it paints) in Flutter
   /// coordinates, for apps that paint their own mask over native bars.
   Rect topBarRect(Size viewSize) =>
@@ -122,6 +142,8 @@ class NativeChromeGeometry {
       other.measured == measured &&
       other.occlusionSupported == occlusionSupported &&
       other.hiddenActionSlot == hiddenActionSlot &&
+      other.iosTopBarFrame == iosTopBarFrame &&
+      other.iosReduceTransparency == iosReduceTransparency &&
       listEquals(other.occlusionRegions, occlusionRegions);
 
   @override
@@ -136,6 +158,8 @@ class NativeChromeGeometry {
     occlusionSupported,
     Object.hashAll(occlusionRegions),
     hiddenActionSlot,
+    iosTopBarFrame,
+    iosReduceTransparency,
   );
 
   @override

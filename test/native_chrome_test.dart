@@ -1988,6 +1988,30 @@ void main() {
       expect(host.top!['pinFirstAction'], isTrue);
     });
 
+    test('optional iOS resting frame rejects invalid geometry', () {
+      final measured = NativeChromeGeometry.fromWire({
+        'iosReduceTransparency': true,
+        'iosTopBarFrame': {'left': 20, 'top': 62, 'width': 362, 'height': 54},
+      });
+      expect(measured.iosTopBarFrame, const Rect.fromLTWH(20, 62, 362, 54));
+      expect(measured.iosReduceTransparency, isTrue);
+      final oldHost = NativeChromeGeometry.fromWire({});
+      expect(oldHost.iosTopBarFrame, isNull);
+      expect(oldHost.iosReduceTransparency, isNull);
+      expect(measured, isNot(oldHost));
+      final malformed = NativeChromeGeometry.fromWire({
+        'iosReduceTransparency': 'true',
+        'iosTopBarFrame': {
+          'left': double.nan,
+          'top': 62,
+          'width': 362,
+          'height': 54,
+        },
+      });
+      expect(malformed.iosTopBarFrame, isNull);
+      expect(malformed.iosReduceTransparency, isNull);
+    });
+
     testWidgets('occlusion geometry is parsed', (tester) async {
       host.geometry = <String, Object?>{
         'topInset': 20.0,
@@ -2330,6 +2354,8 @@ void main() {
                 body: const SizedBox.expand(),
                 topBar: NativeTopBar(
                   title: 'Home',
+                  iosLeadingTitleAccessory: 'wordmark',
+                  iosSubtitle: 'Subtitle',
                   leading: NativeBarAction(
                     id: 'profile',
                     label: 'Profile',
@@ -2343,11 +2369,24 @@ void main() {
                       label: 'Legacy',
                       badge: '3',
                     ),
+                    const NativeBarAction(
+                      id: 'system-loading',
+                      label: 'Working',
+                      loading: true,
+                      iosSystemItem: NativeBarActionIOSSystemItem.save,
+                    ),
+                    const NativeBarAction(
+                      id: 'system-text',
+                      label: 'Edit',
+                      style: NativeBarActionStyle.text,
+                      iosSystemItem: NativeBarActionIOSSystemItem.edit,
+                    ),
                     NativeBarAction(
                       id: 'inbox',
                       label: 'Inbox',
                       badge: '5',
                       iosBadgeAccessibilityValue: '5 unread',
+                      iosSystemItem: NativeBarActionIOSSystemItem.add,
                       onPressed: () {},
                     ),
                   ],
@@ -2358,9 +2397,24 @@ void main() {
         );
         await tester.pumpAndSettle();
         final first = host.top!;
+        expect(
+          first['iosLeadingTitleAccessory'],
+          platform == TargetPlatform.iOS ? 'wordmark' : null,
+        );
+        expect(
+          first['iosSubtitle'],
+          platform == TargetPlatform.iOS ? 'Subtitle' : null,
+        );
         final leading = first['leading'] as Map;
         final actions = first['actions'] as List;
         expect((actions.first as Map)['badge'], '3');
+        for (final action in actions.take(3)) {
+          expect((action as Map).containsKey('iosSystemItem'), false);
+        }
+        expect(
+          (actions.last as Map)['iosSystemItem'],
+          platform == TargetPlatform.iOS ? 'add' : null,
+        );
         expect(
           (actions.first as Map).containsKey('iosBadgeAccessibilityValue'),
           false,
