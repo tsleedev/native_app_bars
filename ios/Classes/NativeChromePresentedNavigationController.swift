@@ -8,13 +8,26 @@ public final class NativeChromePresentedNavigationController: UINavigationContro
   public struct Action {
     public init(systemItem: UIBarButtonItem.SystemItem, enabled: Bool = true,
       handler: @escaping () -> Void) {
+      self.init(systemItem: systemItem, image: nil, accessibilityLabel: nil,
+        enabled: enabled, handler: handler)
+    }
+
+    /// Presents an explicit image with a localized accessibility label.
+    /// A nil image keeps the system item as a visual fallback.
+    public init(systemItem: UIBarButtonItem.SystemItem, image: UIImage?,
+      accessibilityLabel: String?, enabled: Bool = true,
+      handler: @escaping () -> Void) {
       self.systemItem = systemItem
+      self.image = image
+      self.accessibilityLabel = accessibilityLabel
       self.enabled = enabled
       self.handler = handler
     }
 
     public let systemItem: UIBarButtonItem.SystemItem
     public let enabled: Bool
+    fileprivate let image: UIImage?
+    fileprivate let accessibilityLabel: String?
     fileprivate let handler: () -> Void
   }
 
@@ -38,14 +51,20 @@ public final class NativeChromePresentedNavigationController: UINavigationContro
   }
 
   private func makeItem(_ action: Action, item ownerItem: UINavigationItem, generation: UInt64) -> UIBarButtonItem {
-    let item = UIBarButtonItem(systemItem: action.systemItem,
-      primaryAction: UIAction { [weak self, weak ownerItem] _ in
-        guard let self, let ownerItem, action.enabled, self.toolbarGeneration == generation,
-          self.topViewController?.navigationItem === ownerItem,
-          self.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
-        else { return }
-        action.handler()
-      })
+    let handler = UIAction { [weak self, weak ownerItem] _ in
+      guard let self, let ownerItem, action.enabled, self.toolbarGeneration == generation,
+        self.topViewController?.navigationItem === ownerItem,
+        self.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
+      else { return }
+      action.handler()
+    }
+    let item: UIBarButtonItem
+    if let image = action.image {
+      item = UIBarButtonItem(title: nil, image: image, primaryAction: handler, menu: nil)
+    } else {
+      item = UIBarButtonItem(systemItem: action.systemItem, primaryAction: handler)
+    }
+    if let label = action.accessibilityLabel { item.accessibilityLabel = label }
     item.isEnabled = action.enabled
     return item
   }

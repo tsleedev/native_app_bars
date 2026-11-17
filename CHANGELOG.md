@@ -1,3 +1,8 @@
+## 0.1.0-dev.10
+
+- Add a shared iOS document backdrop covering the measured status region and navigation bar, with Reduce Transparency support.
+- Add an optional image and accessibility label for presented UIKit toolbar actions while preserving system-item defaults.
+
 ## 0.1.0-dev.9
 
 - Let shared iOS hosts exclude measured opaque Flutter popup surfaces from native chrome paint while suspended.

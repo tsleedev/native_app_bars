@@ -293,6 +293,14 @@ title action and actions share one id space).
 
 ### Geometry for app overlays (iOS)
 
+For a transparent shared iOS bar over a scrolling document, put
+`NativeChromeDocumentBackdrop` above that document in a full-viewport stack
+or route overlay, below any popup. It blurs once from the status region to
+the measured bar bottom. Reduce Transparency uses the scaffold surface, or
+the optional `reducedTransparencyColor`. The document still owns its rest
+inset and any covered-input policy. Other bar presentations and platforms
+keep their existing behavior unless they explicitly use this widget.
+
 `NativeChrome.of(context).geometry` adds:
 
 - `occlusionSupported` / `occlusionRegions`: active system occlusion regions

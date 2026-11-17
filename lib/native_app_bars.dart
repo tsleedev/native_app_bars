@@ -8,3 +8,4 @@ export 'src/controller.dart'
 export 'src/descriptors.dart';
 export 'src/transport.dart';
 export 'src/widgets.dart';
+export 'src/document_backdrop.dart';
