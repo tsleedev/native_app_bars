@@ -580,6 +580,9 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       item.titleView = nil
       leadingGroups.append(
         UIBarButtonItemGroup(barButtonItems: [titleItem(top, foreground: foreground)], representativeItem: nil))
+    } else if top.titleAccessory != nil {
+      item.title = nil
+      item.titleView = splitTitle(top, foreground: foreground, expanded: false)
     } else if top.titleAction != nil {
       item.title = nil
       item.titleView = titleButton(top, foreground: foreground, expanded: false)
@@ -643,6 +646,72 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     return button
   }
 
+  /// Opt-in split title: the title on one line, truncated at the tail to the
+  /// width the bar leaves (a button when `titleAction` is set), followed by a
+  /// separate accessory button. Each control's hit area is at least 44pt.
+  private func splitTitle(_ top: NativeChromeTopSpec, foreground: UIColor?, expanded: Bool) -> UIView {
+    let minimum: CGFloat = 44
+    let stamp = top.stamp
+    let action = top.titleAction
+    var titleConfiguration = UIButton.Configuration.plain()
+    titleConfiguration.title = top.title
+    titleConfiguration.titleLineBreakMode = .byTruncatingTail
+    titleConfiguration.contentInsets = .zero
+    titleConfiguration.baseForegroundColor = foreground ?? .label
+    titleConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+      var outgoing = incoming
+      outgoing.font = .preferredFont(forTextStyle: expanded ? .title2 : .headline)
+      return outgoing
+    }
+    let title = UIButton(
+      configuration: titleConfiguration,
+      primaryAction: UIAction { [weak self] _ in
+        if let action { self?.emitTop(action, stamp: stamp) }
+      })
+    title.titleLabel?.adjustsFontForContentSizeCategory = true
+    title.titleLabel?.numberOfLines = 1
+    title.contentHorizontalAlignment = .leading
+    title.isUserInteractionEnabled = action != nil
+    if let action { title.isEnabled = action.enabled && !action.loading }
+    title.accessibilityLabel = action?.label ?? top.title
+    title.accessibilityIdentifier = "native_chrome.top.\(action?.id ?? "title")"
+    if action == nil { title.accessibilityTraits = .header }
+    title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    title.setContentHuggingPriority(.required, for: .horizontal)
+
+    let spec = top.titleAccessory!
+    var accessoryConfiguration = UIButton.Configuration.plain()
+    accessoryConfiguration.image = NativeChromeHub.shared.icon(for: spec.icon)
+    accessoryConfiguration.preferredSymbolConfigurationForImage =
+      UIImage.SymbolConfiguration(textStyle: .subheadline)
+      .applying(UIImage.SymbolConfiguration(weight: .semibold))
+    // The glyph sits just after the text; the rest of the 44pt square is
+    // still this control's hit area.
+    accessoryConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 0)
+    accessoryConfiguration.baseForegroundColor = foreground ?? .label
+    accessoryConfiguration.showsActivityIndicator = spec.loading
+    let accessory = UIButton(
+      configuration: accessoryConfiguration,
+      primaryAction: UIAction { [weak self] _ in self?.emitTop(spec, stamp: stamp) })
+    accessory.contentHorizontalAlignment = .leading
+    accessory.isEnabled = spec.enabled && !spec.loading
+    accessory.accessibilityLabel = spec.label
+    accessory.accessibilityIdentifier = "native_chrome.top.\(spec.id)"
+    accessory.setContentCompressionResistancePriority(.required, for: .horizontal)
+    accessory.setContentHuggingPriority(.required, for: .horizontal)
+
+    let stack = UIStackView(arrangedSubviews: [title, accessory])
+    stack.axis = .horizontal
+    stack.alignment = .fill
+    stack.spacing = 0
+    NSLayoutConstraint.activate([
+      title.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum),
+      accessory.widthAnchor.constraint(equalToConstant: minimum),
+      accessory.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum),
+    ])
+    return stack
+  }
+
   private func subtitleTitle(_ title: String, subtitle: String, foreground: UIColor?) -> UIView {
     let labels: [UIView] = [(title, UIFont.TextStyle.headline), (subtitle, .caption1)].map { text, style in
       let label = UILabel()
@@ -665,7 +734,9 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
 
   private func titleItem(_ top: NativeChromeTopSpec, foreground: UIColor?) -> UIBarButtonItem {
     let view: UIView
-    if top.titleAlignment == "leading", top.titleAction == nil,
+    if top.titleAccessory != nil {
+      view = splitTitle(top, foreground: foreground, expanded: top.titleAlignment == "expandedLeading")
+    } else if top.titleAlignment == "leading", top.titleAction == nil,
       let id = top.iosLeadingTitleAccessory, let accessory = leadingTitleAccessoryProvider?(id) {
       accessory.isUserInteractionEnabled = false
       view = accessory
@@ -675,7 +746,8 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
       view = titleButton(top, foreground: foreground, expanded: top.titleAlignment == "expandedLeading")
     }
     let item = UIBarButtonItem(customView: view)
-    item.isEnabled = top.titleAction?.enabled ?? true
+    // A split title enables each of its controls itself.
+    item.isEnabled = top.titleAccessory != nil || (top.titleAction?.enabled ?? true)
     if #available(iOS 26.0, *) { item.hidesSharedBackground = true }
     if #available(iOS 27.1, *) { item.axisBehavior = .horizontalOnly }
     return item

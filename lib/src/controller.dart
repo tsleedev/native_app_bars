@@ -62,6 +62,7 @@ class ChromeOwner {
     final leading = bar.leading ?? _impliedBack;
     if (leading?.id == id) return leading;
     if (bar.titleAction?.id == id) return bar.titleAction;
+    if (bar.titleAccessory?.id == id) return bar.titleAccessory;
     for (final action in bar.actions) {
       if (action.id == id) return action;
     }
@@ -361,7 +362,12 @@ class NativeChromeController extends ChangeNotifier
           )
         : null;
     final leading = bar.leading ?? owner._impliedBack;
-    for (final action in [?leading, ?bar.titleAction, ...bar.actions]) {
+    for (final action in [
+      ?leading,
+      ?bar.titleAction,
+      ?bar.titleAccessory,
+      ...bar.actions,
+    ]) {
       if (action.icon != null) rememberIcon(action.icon!);
     }
     final ios = defaultTargetPlatform == TargetPlatform.iOS && native;
@@ -407,6 +413,9 @@ class NativeChromeController extends ChangeNotifier
       'pinFirstAction': bar.pinFirstAction,
       if (bar.effectiveOpacity != 1) 'opacity': bar.effectiveOpacity,
       'titleAction': bar.titleAction?.toWire(),
+      // Opt-in: omitted when unset so existing bars keep the same wire.
+      if (bar.titleAccessory case final NativeBarAction accessory)
+        'titleAccessory': accessory.toWire(),
       'background': bar.backgroundColor?.toARGB32(),
       'foreground': bar.foregroundColor?.toARGB32(),
       'leading': leadingWire,

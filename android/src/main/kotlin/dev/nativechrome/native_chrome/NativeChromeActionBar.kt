@@ -22,7 +22,45 @@ object NativeChromeActionBar {
         val invoke: (Menu, MenuItem) -> Unit,
     )
 
-    fun update(actionBar: ActionBar?, toolbar: Toolbar, title: String, up: Up?) {
+    /** Opt-in split title for [update]: see `NativeTopBar.titleAccessory`. */
+    data class SplitTitle(
+        val titleAction: NativeChromeSplitTitle.Control?,
+        val accessory: NativeChromeSplitTitle.Control,
+        val accessoryIcon: Drawable?,
+        val foreground: Int? = null,
+    )
+
+    private const val SPLIT_TITLE_TAG = "native_chrome.splitTitle"
+
+    /**
+     * [split] null (the default) keeps the platform title. A split title
+     * replaces it with a one-line, end-truncated title and a separate
+     * accessory button, each with at least a 48dp hit area.
+     */
+    fun update(actionBar: ActionBar?, toolbar: Toolbar, title: String, up: Up?, split: SplitTitle? = null) {
+        if (split != null && actionBar != null) {
+            val row = NativeChromeSplitTitle.build(
+                context = actionBar.themedContext,
+                title = title,
+                textSize = 20f,
+                foreground = split.foreground,
+                titleAction = split.titleAction,
+                accessory = split.accessory,
+                accessoryIcon = split.accessoryIcon,
+            ).apply { tag = SPLIT_TITLE_TAG }
+            actionBar.setCustomView(row, ActionBar.LayoutParams(
+                ActionBar.LayoutParams.WRAP_CONTENT,
+                ActionBar.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL,
+            ))
+            actionBar.setDisplayShowCustomEnabled(true)
+            actionBar.setDisplayShowTitleEnabled(false)
+        } else if (actionBar?.customView?.tag == SPLIT_TITLE_TAG) {
+            // Only undo what a split title installed; other apps are untouched.
+            actionBar.customView = null
+            actionBar.setDisplayShowCustomEnabled(false)
+            actionBar.setDisplayShowTitleEnabled(true)
+        }
         actionBar?.title = title
         actionBar?.setDisplayHomeAsUpEnabled(up != null)
         actionBar?.setHomeButtonEnabled(up?.enabled == true)

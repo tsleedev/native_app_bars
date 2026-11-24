@@ -1953,6 +1953,169 @@ void main() {
       });
     }
 
+    NativeChromeScaffold split({
+      String title = 'Haneul · 54 days',
+      bool accessoryEnabled = true,
+      bool withTitleAction = true,
+    }) => NativeChromeScaffold(
+      topBar: NativeTopBar(
+        title: title,
+        titleAction: withTitleAction
+            ? NativeBarAction(
+                id: 'profile',
+                label: '$title, profile',
+                icon: NativeChromeIcons.save,
+                onPressed: () => log.add('profile'),
+              )
+            : null,
+        titleAccessory: NativeBarAction(
+          id: 'switch',
+          label: 'Switch baby',
+          icon: const NativeChromeIcon(
+            Icons.expand_more,
+            iosSymbol: 'chevron.down',
+          ),
+          enabled: accessoryEnabled,
+          onPressed: () => log.add('switch'),
+        ),
+        actions: <NativeBarAction>[
+          NativeBarAction(
+            id: 'inbox',
+            label: 'Inbox',
+            icon: NativeChromeIcons.home,
+            onPressed: () => log.add('inbox'),
+          ),
+        ],
+      ),
+      body: const SizedBox(),
+    );
+
+    testWidgets('titleAccessory is opt-in: unset bars keep the same wire', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        testApp(controller: controller, home: page(saving: false)),
+      );
+      await tester.pumpAndSettle();
+      final top = host.top!;
+      expect(top.containsKey('titleAccessory'), isFalse);
+      expect((top['titleAction'] as Map)['id'], 'pickDate');
+    });
+
+    testWidgets('titleAccessory wire and dispatch are separate controls', (
+      tester,
+    ) async {
+      await tester.pumpWidget(testApp(controller: controller, home: split()));
+      await tester.pumpAndSettle();
+      final top = host.top!;
+      expect((top['titleAction'] as Map)['id'], 'profile');
+      final accessory = top['titleAccessory'] as Map;
+      expect(accessory['id'], 'switch');
+      expect(accessory['label'], 'Switch baby');
+      expect(accessory['enabled'], isTrue);
+      expect(accessory['icon'], isNotNull);
+      await host.tapTop('switch');
+      expect(log.events, <String>['switch']);
+      await host.tapTop('profile');
+      expect(log.events, <String>['switch', 'profile']);
+
+      await tester.pumpWidget(
+        testApp(controller: controller, home: split(accessoryEnabled: false)),
+      );
+      await tester.pumpAndSettle();
+      expect((host.top!['titleAccessory'] as Map)['enabled'], isFalse);
+      await host.tapTop('switch');
+      expect(log.events, <String>['switch', 'profile']);
+    });
+
+    testWidgets('Flutter split title: one line, two 48dp targets', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const long = 'A very very long baby name that cannot fit · 54 days';
+      await tester.pumpWidget(
+        testApp(
+          controller: controller,
+          config: const NativeChromeConfig.allFlutter(),
+          home: split(title: long),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final titleKey = find.byKey(
+        const ValueKey<String>('native_chrome.flutter.action.profile'),
+      );
+      final accessoryKey = find.byKey(
+        const ValueKey<String>('native_chrome.flutter.action.switch'),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('native_chrome.flutter.titleIcon')),
+        findsNothing,
+      );
+      final text = tester.widget<Text>(find.text(long));
+      expect(text.maxLines, 1);
+      expect(text.overflow, TextOverflow.ellipsis);
+      final titleRect = tester.getRect(titleKey);
+      final accessoryRect = tester.getRect(accessoryKey);
+      final inboxRect = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('native_chrome.flutter.action.inbox'),
+        ),
+      );
+      expect(titleRect.height, greaterThanOrEqualTo(48));
+      expect(accessoryRect.size, const Size(48, 48));
+      expect(titleRect.right, lessThanOrEqualTo(accessoryRect.left));
+      expect(accessoryRect.right, lessThanOrEqualTo(inboxRect.left));
+      expect(tester.takeException(), isNull);
+
+      expect(
+        tester.getSemantics(titleKey),
+        matchesSemantics(
+          label: '$long, profile',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasTapAction: true,
+          // The AppBar title slot marks its subtree as the route header.
+          isHeader: true,
+          namesRoute: true,
+        ),
+      );
+      await tester.tap(accessoryKey);
+      expect(log.events, <String>['switch']);
+      await tester.tap(titleKey);
+      expect(log.events, <String>['switch', 'profile']);
+    });
+
+    testWidgets('split title without a titleAction keeps a plain heading', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        testApp(
+          controller: controller,
+          config: const NativeChromeConfig.allFlutter(),
+          home: split(withTitleAction: false),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('native_chrome.flutter.action.profile'),
+        ),
+        findsNothing,
+      );
+      await tester.tap(find.text('Haneul · 54 days'));
+      expect(log.events, isEmpty);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('native_chrome.flutter.action.switch'),
+        ),
+      );
+      expect(log.events, <String>['switch']);
+    });
+
     testWidgets('pinFirstAction is opt-in and actions keep their order', (
       tester,
     ) async {

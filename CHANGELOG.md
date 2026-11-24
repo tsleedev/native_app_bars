@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add an opt-in `NativeTopBar.titleAccessory`: a separate control right after a one-line, tail-truncated title, so the title (`titleAction`) and the accessory act independently. Each gets at least a 44pt (iOS) / 48dp (Android, Flutter) hit area. Bars without it keep the existing rendering and wire.
+
 ## 0.1.0-dev.10
 
 - Add a shared iOS document backdrop covering the measured status region and navigation bar, with Reduce Transparency support.

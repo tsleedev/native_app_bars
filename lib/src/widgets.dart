@@ -1039,7 +1039,84 @@ PreferredSizeWidget _defaultAppBar(
     style: expanded ? Theme.of(context).textTheme.titleLarge : null,
   );
   final titleAction = top.titleAction;
-  if (titleAction != null) {
+  final titleAccessory = top.titleAccessory;
+  if (titleAccessory != null) {
+    // Opt-in split title: the one-line title (optionally [titleAction]) and a
+    // separate accessory control, each with its own 48dp hit area.
+    title = Text(
+      bar.title,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      style: expanded ? Theme.of(context).textTheme.titleLarge : null,
+    );
+    if (titleAction != null) {
+      final onTitle = titleAction.isEnabled
+          ? () => bar.invoke(titleAction)
+          : null;
+      title = Semantics(
+        button: true,
+        label: titleAction.label,
+        enabled: titleAction.isEnabled,
+        onTap: onTitle,
+        excludeSemantics: true,
+        child: InkWell(
+          key: ValueKey<String>(
+            'native_chrome.flutter.action.${titleAction.id}',
+          ),
+          onTap: onTitle,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              widthFactor: 1,
+              child: title,
+            ),
+          ),
+        ),
+      );
+    }
+    final accessoryKey = ValueKey<String>(
+      'native_chrome.flutter.action.${titleAccessory.id}',
+    );
+    final Widget accessory = titleAccessory.loading
+        ? SizedBox.square(
+            key: accessoryKey,
+            dimension: 48,
+            child: Center(
+              child: Semantics(
+                label: titleAccessory.label,
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: top.foregroundColor,
+                  ),
+                ),
+              ),
+            ),
+          )
+        : IconButton(
+            key: accessoryKey,
+            tooltip: titleAccessory.label,
+            onPressed: titleAccessory.isEnabled
+                ? () => bar.invoke(titleAccessory)
+                : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+            icon: Icon(
+              titleAccessory.icon?.icon ?? Icons.expand_more,
+              size: 20,
+            ),
+          );
+    title = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Flexible(child: title),
+        accessory,
+      ],
+    );
+  } else if (titleAction != null) {
     // Same affordance as the native bars: the icon (or a spinner while
     // loading) follows a centred title and precedes a start-aligned one.
     Widget? adornment;

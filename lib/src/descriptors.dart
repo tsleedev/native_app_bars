@@ -240,6 +240,7 @@ class NativeTopBar {
     this.presentation = NativeTopBarPresentation.opaque,
     this.titleAlignment = NativeTopBarTitleAlignment.platform,
     this.titleAction,
+    this.titleAccessory,
     this.iosLeadingTitleAccessory,
     this.iosSubtitle,
     this.backgroundColor,
@@ -259,10 +260,23 @@ class NativeTopBar {
   /// Makes the title tappable (for example a date picker). Its `label` is the
   /// accessibility label; the visible text is [title].
   final NativeBarAction? titleAction;
+
+  /// Opt-in small control right after the title, with its own hit target, for
+  /// when the title and the control do different things (for example title →
+  /// profile, a chevron → switch profile). Its [NativeBarAction.icon] is drawn
+  /// and its `label` is the accessibility label.
+  ///
+  /// With it, every renderer shows the title on one line, truncated at the
+  /// tail to the width the bar leaves, and [titleAction] (if any) acts on the
+  /// title text only, without its own icon. Each control gets at least a 44pt
+  /// (iOS) / 48dp (Android, Flutter) square hit area. Null keeps the existing
+  /// title rendering and wire format.
+  final NativeBarAction? titleAccessory;
   final NativeTopBarTitleAlignment titleAlignment;
 
   /// Identifier for an app-provided, noninteractive UIKit leading title view.
-  /// Requires [titleAlignment] to be leading and no [titleAction]. If the
+  /// Requires [titleAlignment] to be leading, no [titleAction] and no
+  /// [titleAccessory]. If the
   /// native host omits the provider or identifier, it displays [title] normally.
   final String? iosLeadingTitleAccessory;
 

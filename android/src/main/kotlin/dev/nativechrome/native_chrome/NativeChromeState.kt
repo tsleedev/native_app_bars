@@ -70,6 +70,8 @@ data class NativeChromeTopSpec(
     /** platform | leading | expandedLeading */
     val titleAlignment: String = "platform",
     val titleAction: NativeChromeActionSpec? = null,
+    /** Opt-in control after the title with its own hit area (split title). */
+    val titleAccessory: NativeChromeActionSpec? = null,
     val background: Int? = null,
     val foreground: Int? = null,
     val opacity: Float = 1f,
@@ -86,6 +88,7 @@ data class NativeChromeTopSpec(
                 actions = (map["actions"] as? List<*> ?: emptyList<Any>()).mapNotNull { NativeChromeActionSpec.parse(it) },
                 titleAlignment = map["titleAlignment"] as? String ?: "platform",
                 titleAction = NativeChromeActionSpec.parse(map["titleAction"]),
+                titleAccessory = NativeChromeActionSpec.parse(map["titleAccessory"]),
                 background = NativeChromeAppearanceSpec.color(map["background"]),
                 foreground = NativeChromeAppearanceSpec.color(map["foreground"]),
                 opacity = (map["opacity"] as? Number)?.toDouble()?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)?.toFloat() ?: 1f,

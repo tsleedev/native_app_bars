@@ -100,6 +100,8 @@ public struct NativeChromeTopSpec: Equatable {
   /// platform | leading | expandedLeading
   public let titleAlignment: String
   public let titleAction: NativeChromeActionSpec?
+  /// Opt-in control after the title with its own hit area (split title).
+  public let titleAccessory: NativeChromeActionSpec?
   let iosLeadingTitleAccessory: String?
   let iosSubtitle: String?
   public let background: UIColor?
@@ -116,6 +118,7 @@ public struct NativeChromeTopSpec: Equatable {
     stamp.ownerToken == other.stamp.ownerToken && stamp.routeSession == other.stamp.routeSession
       && title == other.title && presentation == other.presentation
       && titleAlignment == other.titleAlignment && titleAction == other.titleAction
+      && titleAccessory == other.titleAccessory
       && iosLeadingTitleAccessory == other.iosLeadingTitleAccessory && iosSubtitle == other.iosSubtitle
       && background == other.background && foreground == other.foreground
       && (leading.map { action in other.leading.map { action.hasSameControl(as: $0) } ?? false }
@@ -132,6 +135,7 @@ public struct NativeChromeTopSpec: Equatable {
     presentation = map["presentation"] as? String ?? "opaque"
     titleAlignment = map["titleAlignment"] as? String ?? "platform"
     titleAction = NativeChromeActionSpec(map["titleAction"])
+    titleAccessory = NativeChromeActionSpec(map["titleAccessory"])
     let accessory = map["iosLeadingTitleAccessory"] as? String
     iosLeadingTitleAccessory = accessory.flatMap { (1...64).contains($0.utf16.count) ? $0 : nil }
     iosSubtitle = (map["iosSubtitle"] as? String).flatMap { (1...512).contains($0.utf16.count) ? $0 : nil }

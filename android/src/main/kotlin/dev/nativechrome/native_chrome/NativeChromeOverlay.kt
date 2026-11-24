@@ -450,6 +450,31 @@ internal class NativeChromeOverlay(
      * title and precedes a start-aligned one, as on iOS and in Flutter.
      */
     private fun applyTitle(top: NativeChromeTopSpec, foreground: Int?, forceCustom: Boolean) {
+        top.titleAccessory?.let { accessory ->
+            toolbar.title = null
+            val row = NativeChromeSplitTitle.build(
+                context = themed,
+                title = top.title,
+                textSize = if (top.titleAlignment == "expandedLeading") 22f else 20f,
+                foreground = foreground,
+                titleAction = top.titleAction?.let { action ->
+                    NativeChromeSplitTitle.Control(
+                        id = action.id, label = action.label, enabled = action.enabled && !action.loading,
+                    ) { emitTop(action, top.stamp) }
+                },
+                accessory = NativeChromeSplitTitle.Control(
+                    id = accessory.id, label = accessory.label, enabled = accessory.enabled && !accessory.loading,
+                ) { emitTop(accessory, top.stamp) },
+                accessoryIcon = drawable(accessory.icon, foreground),
+            )
+            toolbar.addView(row, androidx.appcompat.widget.Toolbar.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.START or Gravity.CENTER_VERTICAL,
+            ))
+            customTitle = row
+            return
+        }
         val custom = forceCustom || top.titleAction != null || top.titleAlignment == "expandedLeading"
         if (!custom) {
             toolbar.title = top.title
