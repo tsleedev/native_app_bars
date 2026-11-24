@@ -1066,7 +1066,7 @@ PreferredSizeWidget _defaultAppBar(
           ),
           onTap: onTitle,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             child: Align(
               alignment: AlignmentDirectional.centerStart,
               widthFactor: 1,

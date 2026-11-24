@@ -706,6 +706,7 @@ public final class NativeChromeHostViewController: UIViewController, UINavigatio
     stack.spacing = 0
     NSLayoutConstraint.activate([
       title.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum),
+      title.widthAnchor.constraint(greaterThanOrEqualToConstant: minimum),
       accessory.widthAnchor.constraint(equalToConstant: minimum),
       accessory.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum),
     ])

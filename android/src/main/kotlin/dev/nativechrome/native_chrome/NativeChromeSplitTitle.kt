@@ -16,8 +16,9 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 /**
  * Opt-in split title (`NativeTopBar.titleAccessory`): a one-line title that is
  * truncated at the end to the width the bar leaves (a button when it has a
- * title action), followed by a separate accessory button. Each control has at
- * least a 48dp hit area. Shared by the overlay toolbar and [NativeChromeActionBar].
+ * title action), followed by a separate accessory button, optionally after a
+ * leading image button (for example an avatar). Each control has at least a
+ * 48dp square hit area. Shared by the overlay toolbar and [NativeChromeActionBar].
  */
 object NativeChromeSplitTitle {
     data class Control(
@@ -35,6 +36,8 @@ object NativeChromeSplitTitle {
         titleAction: Control?,
         accessory: Control,
         accessoryIcon: Drawable?,
+        leading: Control? = null,
+        leadingIcon: Drawable? = null,
     ): LinearLayout {
         val density = context.resources.displayMetrics.density
         val minimum = (48 * density).toInt()
@@ -47,6 +50,8 @@ object NativeChromeSplitTitle {
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER_VERTICAL
             minHeight = minimum
+            // A short title still keeps a square hit area.
+            minWidth = minimum
             if (titleAction == null) {
                 ViewCompat.setAccessibilityHeading(this, true)
             } else {
@@ -72,10 +77,29 @@ object NativeChromeSplitTitle {
             setPadding(0, 0, 0, 0)
             setOnClickListener { if (accessory.enabled) accessory.invoke() }
         }
+        val leadingButton = leading?.let { control ->
+            ImageButton(context).apply {
+                tag = "native_chrome.top.${control.id}"
+                setImageDrawable(leadingIcon)
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                // A 32dp image (for example an avatar) in a 48dp target.
+                val inset = (8 * density).toInt()
+                setPadding(inset, inset, inset, inset)
+                contentDescription = control.label
+                isEnabled = control.enabled
+                background = ripple(context, borderless = true)
+                setOnClickListener { if (control.enabled) control.invoke() }
+            }
+        }
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = minimum
+            leadingButton?.let {
+                addView(it, LinearLayout.LayoutParams(minimum, minimum).apply {
+                    marginEnd = (8 * density).toInt()
+                })
+            }
             // A weighted wrap-content title shrinks (and ellipsizes) when the
             // bar is narrower than title + accessory.
             addView(text, LinearLayout.LayoutParams(

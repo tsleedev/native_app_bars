@@ -28,6 +28,9 @@ object NativeChromeActionBar {
         val accessory: NativeChromeSplitTitle.Control,
         val accessoryIcon: Drawable?,
         val foreground: Int? = null,
+        /** Optional leading image control (for example an avatar) before the title. */
+        val leading: NativeChromeSplitTitle.Control? = null,
+        val leadingIcon: Drawable? = null,
     )
 
     private const val SPLIT_TITLE_TAG = "native_chrome.splitTitle"
@@ -47,6 +50,8 @@ object NativeChromeActionBar {
                 titleAction = split.titleAction,
                 accessory = split.accessory,
                 accessoryIcon = split.accessoryIcon,
+                leading = split.leading,
+                leadingIcon = split.leadingIcon,
             ).apply { tag = SPLIT_TITLE_TAG }
             actionBar.setCustomView(row, ActionBar.LayoutParams(
                 ActionBar.LayoutParams.WRAP_CONTENT,

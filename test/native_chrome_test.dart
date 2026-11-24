@@ -2089,6 +2089,28 @@ void main() {
       expect(log.events, <String>['switch', 'profile']);
     });
 
+    testWidgets('Flutter split title keeps a 48dp square for a short title', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        testApp(
+          controller: controller,
+          config: const NativeChromeConfig.allFlutter(),
+          home: split(title: 'A'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final titleRect = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('native_chrome.flutter.action.profile'),
+        ),
+      );
+      expect(titleRect.width, greaterThanOrEqualTo(48));
+      expect(titleRect.height, greaterThanOrEqualTo(48));
+      await tester.tapAt(titleRect.topRight + const Offset(-2, 2));
+      expect(log.events, <String>['profile']);
+    });
+
     testWidgets('split title without a titleAction keeps a plain heading', (
       tester,
     ) async {

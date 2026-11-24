@@ -268,8 +268,9 @@ class NativeTopBar {
   ///
   /// With it, every renderer shows the title on one line, truncated at the
   /// tail to the width the bar leaves, and [titleAction] (if any) acts on the
-  /// title text only, without its own icon. Each control gets at least a 44pt
-  /// (iOS) / 48dp (Android, Flutter) square hit area. Null keeps the existing
+  /// title text only, without its own icon. Each control, including a short
+  /// title, gets at least a 44pt (iOS) / 48dp (Android, Flutter) square hit
+  /// area. Null keeps the existing
   /// title rendering and wire format.
   final NativeBarAction? titleAccessory;
   final NativeTopBarTitleAlignment titleAlignment;
