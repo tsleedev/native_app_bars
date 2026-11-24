@@ -169,6 +169,19 @@ internal class NativeChromeOverlay(
         val oldToolbar = toolbar
         oldToolbar.dismissPopupMenus()
         detachTopBadges()
+        // Drop the old bars' custom views and input: a hidden top bar keeps
+        // them until its next visible apply, which now targets the new bar.
+        leadingView?.let { oldToolbar.removeView(it) }
+        leadingView = null
+        customTitle?.let { oldToolbar.removeView(it) }
+        customTitle = null
+        oldToolbar.setNavigationOnClickListener(null)
+        oldToolbar.setOnMenuItemClickListener(null)
+        oldToolbar.menu.clear()
+        for (nav in navs) {
+            nav.setOnItemSelectedListener(null)
+            nav.setOnItemReselectedListener(null)
+        }
         toolbar = MaterialToolbar(themed).also { next ->
             next.alpha = oldToolbar.alpha
             next.visibility = oldToolbar.visibility
@@ -195,13 +208,28 @@ internal class NativeChromeOverlay(
         appliedTabItems = null
         appliedTabKey = null
         tabIds = emptyList()
-        // Bars only: suspension and its dim keep their running state.
+        // Bars only: suspension and its dim keep their running state. The
+        // dims follow the containers if the tab bar moved (bottom <-> rail).
         state?.let {
             applyTop(it.top, it.appearance)
             applyTab(it.tab, it.appearance)
+            syncDimVisibility(it)
         }
         updateRailPadding()
         requestLayout()
+        // A transition may begin before the next frame: lay the new bars out
+        // now so its outgoing snapshot shows them.
+        layoutNow()
+    }
+
+    /** Measures and lays out this view at its current size, before the next frame. */
+    private fun layoutNow() {
+        if (width == 0 || height == 0) return
+        measure(
+            MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY),
+        )
+        layout(left, top, right, bottom)
     }
 
     private fun swap(container: android.view.ViewGroup, old: View, next: View, params: LayoutParams) {
@@ -785,6 +813,14 @@ internal class NativeChromeOverlay(
         railContainer.importantForAccessibility = mode
     }
 
+    /** Dims cover the visible containers only (alpha and animation untouched). */
+    private fun syncDimVisibility(next: NativeChromeStateSpec) {
+        val transparentTop = next.top?.presentation == "transparent"
+        topDim.visibility = if (transparentTop) View.INVISIBLE else topContainer.visibility
+        bottomDim.visibility = bottomContainer.visibility
+        railDim.visibility = if (railContainer.visibility == View.VISIBLE) View.VISIBLE else View.INVISIBLE
+    }
+
     private fun applySuspension(next: NativeChromeStateSpec, previous: NativeChromeStateSpec?) {
         if (accessibilitySuspended != next.suspended) setAccessibilitySuspended(next.suspended)
         val wasDimmed = previous?.suspended == true && previous.dimColor != null
@@ -797,9 +833,7 @@ internal class NativeChromeOverlay(
         // A transparent top bar shows Flutter content that the popup barrier
         // already dims: fade only the toolbar there (dim exactly once).
         val transparentTop = next.top?.presentation == "transparent"
-        topDim.visibility = if (transparentTop) View.INVISIBLE else topContainer.visibility
-        bottomDim.visibility = bottomContainer.visibility
-        railDim.visibility = if (railContainer.visibility == View.VISIBLE) View.VISIBLE else View.INVISIBLE
+        syncDimVisibility(next)
         val factor = next.dimColor?.let { 1f - android.graphics.Color.alpha(it) / 255f } ?: 1f
         val topTo = if (dimmed && !transparentTop) 1f else 0f
         val bottomTo = if (dimmed) 1f else 0f
@@ -834,6 +868,8 @@ internal class NativeChromeOverlay(
         when (map["phase"]) {
             "begin" -> {
                 endTransition()
+                // Bars rebuilt or changed since the last frame: capture them laid out.
+                if (topContainer.isLayoutRequested || toolbar.isLayoutRequested) layoutNow()
                 if (topContainer.visibility != View.VISIBLE || topContainer.width == 0 || topContainer.height == 0) return
                 val bitmap = Bitmap.createBitmap(topContainer.width, topContainer.height, Bitmap.Config.ARGB_8888)
                 topContainer.draw(Canvas(bitmap))
