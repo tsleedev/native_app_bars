@@ -9,3 +9,5 @@ export 'src/descriptors.dart';
 export 'src/transport.dart';
 export 'src/widgets.dart';
 export 'src/document_backdrop.dart';
+export 'src/android_header_backdrop.dart';
+export 'src/segmented_control.dart';

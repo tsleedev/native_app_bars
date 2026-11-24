@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Add `NativeChromeSegmentedControl`, Flutter-drawn segments with 48dp targets that ignore selection while the app is not resumed, the owner or route policy is inactive, or the route is covered or animating, checked again when a tap is delivered.
+- Add `NativeChromeAndroidHeaderBackdrop` (Dart) and `NativeChromeDocumentBackdrop` (Kotlin) for one blur behind a translucent Android host bar and its fixed page header, with the bar tint repeated below the bar and an opaque API 26 fallback.
+- The Android overlay and `EmbeddedNativeTopBar` rebuild their bar and tab items when the activity handles a runtime font size or display size change; hosts can compare `NativeChromeMetrics` snapshots for their own bars.
 - Add an opt-in `NativeTopBar.titleAccessory`: a separate control right after a one-line, tail-truncated title, so the title (`titleAction`) and the accessory act independently. Each gets at least a 44pt (iOS) / 48dp (Android, Flutter) hit area. Bars without it keep the existing rendering and wire.
 
 ## 0.1.0-dev.10

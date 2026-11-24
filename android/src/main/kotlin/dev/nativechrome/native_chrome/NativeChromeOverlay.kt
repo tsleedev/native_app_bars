@@ -55,7 +55,18 @@ internal class NativeChromeOverlay(
     private val railDim = View(context)
     private val topIds = GenerationalMenuIds()
     private val badgeTasks = GenerationalTasks({ toolbar.post(it) }, { toolbar.removeCallbacks(it) })
-    private val density = resources.displayMetrics.density
+    // Live: an activity that handles density changes itself keeps this view.
+    private val density get() = resources.displayMetrics.density
+    /** Text scale and density the current bar and tab views were built with. */
+    private var builtMetrics = NativeChromeMetrics.of(context)
+
+    /**
+     * Set by an owner that can replace this overlay (the plugin): called once
+     * when the activity handled a font size or display size change, so the
+     * owner installs a fresh overlay built with the current values. Without
+     * an owner the overlay rebuilds its own content in place.
+     */
+    var onMetricsChanged: (() -> Unit)? = null
 
     private var state: NativeChromeStateSpec? = null
     private var appliedTop: NativeChromeTopSpec? = null
@@ -212,8 +223,39 @@ internal class NativeChromeOverlay(
         // The rail follows the smallest screen width; resizing (multi-window,
         // foldables, configChanges-handled rotation) can cross 600dp.
         post {
+            val current = NativeChromeMetrics.of(context)
+            val replace = onMetricsChanged
+            if (current != builtMetrics && replace != null) {
+                builtMetrics = current
+                replace()
+                return@post
+            }
+            invalidateForMetrics()
             reapply()
             requestLayout()
+        }
+    }
+
+    /**
+     * Without an owner that replaces this overlay: a font size or display
+     * size change handled by the activity keeps these views, whose text and
+     * control sizes were converted to pixels when they were built. Drop the
+     * applied content so the next apply rebuilds the bar's custom views, its
+     * menu and the tab items with the current values. Sizes the framework
+     * toolbar resolved at construction may stay; hosts that own an
+     * [EmbeddedNativeTopBar] recreate it instead (see [NativeChromeMetrics]).
+     */
+    private fun invalidateForMetrics() {
+        val current = NativeChromeMetrics.of(context)
+        if (current == builtMetrics) return
+        builtMetrics = current
+        appliedTop = null
+        appliedTopKey = null
+        appliedTabItems = null
+        tabIds = emptyList()
+        val size = android.util.TypedValue()
+        if (themed.theme.resolveAttribute(androidx.appcompat.R.attr.actionBarSize, size, true)) {
+            toolbar.minimumHeight = android.util.TypedValue.complexToDimensionPixelSize(size.data, resources.displayMetrics)
         }
     }
 

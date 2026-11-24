@@ -130,6 +130,22 @@ Programmatic selection is silent for the Android binder's own callback. Keep
 system styling, the callbacks' route checks and the view geometry in the app.
 Close the Android binder when the control leaves its host.
 
+Where a platform tab strip does not fit, for example Android segments over a
+header blur, `NativeChromeSegmentedControl` draws segments in Flutter: a
+surface track with the selected segment as a pill. Every segment's touch and
+accessibility target is at least 48dp high, including stacked controls
+without a gap. Selection is ignored while the app is not resumed (Android
+reports a window without focus as inactive), while `active` is false, while
+`routeIsActive` rejects the enclosing route, or while that route is covered or
+animating. These are checked again when a tap is delivered.
+
+An activity that handles `fontScale` or `density` changes itself keeps its
+views, whose text and control sizes were converted to pixels when they were
+built. The package overlay and `EmbeddedNativeTopBar` rebuild their bar and
+tab items when either changes. A host that builds its own bars compares
+`NativeChromeMetrics.of(context)` with the snapshot it built them with, and
+rebuilds them, together with any `createConfigurationContext` snapshot.
+
 ## Use
 
 Set `uses-material-design: true` in the consuming app when using Flutter's
@@ -318,6 +334,19 @@ apply chrome state from inside it) and `hiddenActionSlotRect`. An app can
 cover the frame gap with its own view at that rect until its Flutter overlay
 has painted. `NativeChromeController.transitionActive` tells Flutter overlays
 when a bar transition is running.
+
+### Header blur on an existing Android host
+
+A host whose own bar is translucent over a scrolling document paints
+`NativeChromeDocumentBackdrop.barTint(surface)` (Kotlin, alpha
+`BAR_ALPHA`) on the bar and reports it to Flutter. In the document's
+full-viewport stack, place `NativeChromeAndroidHeaderBackdrop` above the
+document and below the header controls. It blurs from the status region to
+the bottom of the fixed page header (bar plus segments or filters) and repeats
+the tint below the bar. Use it only when the host confirms that its bar is
+translucent for that document (`NativeChromeDocumentBackdrop.supported` is
+false on API 26, which keeps an opaque bar); otherwise keep the header above
+the document. The document still owns its rest inset and covered-input policy.
 
 ### Versions
 

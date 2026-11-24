@@ -159,15 +159,7 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
                 publishHostReady(false)
                 return@post
             }
-            val view = NativeChromeOverlay(activity, sendFromView@{ method, args ->
-                if (hostGeneration == generation && this.activity === activity) {
-                    if (args["androidOverflow"] == true && activityLifecycle?.currentState != Lifecycle.State.RESUMED) {
-                        return@sendFromView
-                    }
-                    val scoped = args + ("hostGeneration" to generation)
-                    send(method, if (method == "geometry") scoped + ("lease" to connection.lease) else scoped)
-                }
-            }, connection::nextRequestId) { spec -> spec?.let { icons[it.key] } }
+            val view = createOverlay(activity, generation)
             content.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             overlay = view
             view.iconVersion = iconVersion
@@ -178,6 +170,40 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
                 }
             }
         }
+    }
+
+    private fun createOverlay(activity: Activity, generation: Int): NativeChromeOverlay {
+        lateinit var view: NativeChromeOverlay
+        view = NativeChromeOverlay(activity, sendFromView@{ method, args ->
+            if (hostGeneration == generation && this.activity === activity) {
+                if (args["androidOverflow"] == true && activityLifecycle?.currentState != Lifecycle.State.RESUMED) {
+                    return@sendFromView
+                }
+                val scoped = args + ("hostGeneration" to generation)
+                send(method, if (method == "geometry") scoped + ("lease" to connection.lease) else scoped)
+            }
+        }, connection::nextRequestId) { spec -> spec?.let { icons[it.key] } }
+        view.onMetricsChanged = { replaceOverlay(activity, generation, view) }
+        return view
+    }
+
+    /**
+     * The activity handled a font size or display size change: the bars'
+     * framework views keep sizes converted when they were built, so install a
+     * fresh overlay in the same place with the same host generation and state.
+     */
+    private fun replaceOverlay(activity: Activity, generation: Int, old: NativeChromeOverlay) {
+        if (hostGeneration != generation || this.activity !== activity || overlay !== old) return
+        val content = old.parent as? ViewGroup ?: return
+        old.toolbar.dismissPopupMenus()
+        old.onMetricsChanged = null
+        val index = content.indexOfChild(old)
+        val view = createOverlay(activity, generation)
+        content.removeView(old)
+        content.addView(view, index, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        overlay = view
+        view.iconVersion = iconVersion
+        connection.lastState?.let { view.apply(it) }
     }
 
     private fun uninstall() {
