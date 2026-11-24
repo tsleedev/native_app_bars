@@ -160,8 +160,9 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
                 return@post
             }
             val view = createOverlay(activity, generation)
-            content.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            // Current before it is attached: only the current overlay sends.
             overlay = view
+            content.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             view.iconVersion = iconVersion
             connection.lastState?.let { view.apply(it) }
             view.post {
@@ -175,7 +176,7 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
     private fun createOverlay(activity: Activity, generation: Int): NativeChromeOverlay {
         lateinit var view: NativeChromeOverlay
         view = NativeChromeOverlay(activity, sendFromView@{ method, args ->
-            if (hostGeneration == generation && this.activity === activity) {
+            if (hostGeneration == generation && this.activity === activity && overlay === view) {
                 if (args["androidOverflow"] == true && activityLifecycle?.currentState != Lifecycle.State.RESUMED) {
                     return@sendFromView
                 }
@@ -191,18 +192,21 @@ class NativeChromePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activ
      * The activity handled a font size or display size change: the bars'
      * framework views keep sizes converted when they were built, so install a
      * fresh overlay in the same place with the same host generation and state.
+     * The overlay defers this while a bar transition runs. The replaced view
+     * stops its animation and deferred work and can no longer send events;
+     * the new one continues its popup dim and shows the current selection.
      */
     private fun replaceOverlay(activity: Activity, generation: Int, old: NativeChromeOverlay) {
         if (hostGeneration != generation || this.activity !== activity || overlay !== old) return
         val content = old.parent as? ViewGroup ?: return
-        old.toolbar.dismissPopupMenus()
-        old.onMetricsChanged = null
         val index = content.indexOfChild(old)
         val view = createOverlay(activity, generation)
+        view.iconVersion = iconVersion
+        view.inheritPresentation(old)
+        overlay = view
+        old.dispose()
         content.removeView(old)
         content.addView(view, index, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        overlay = view
-        view.iconVersion = iconVersion
         connection.lastState?.let { view.apply(it) }
     }
 

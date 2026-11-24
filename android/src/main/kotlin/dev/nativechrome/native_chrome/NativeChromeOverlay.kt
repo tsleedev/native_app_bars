@@ -67,6 +67,7 @@ internal class NativeChromeOverlay(
      * an owner the overlay rebuilds its own content in place.
      */
     var onMetricsChanged: (() -> Unit)? = null
+    private val replacement = NativeChromeMetricsReplacement()
 
     private var state: NativeChromeStateSpec? = null
     private var appliedTop: NativeChromeTopSpec? = null
@@ -227,7 +228,7 @@ internal class NativeChromeOverlay(
             val replace = onMetricsChanged
             if (current != builtMetrics && replace != null) {
                 builtMetrics = current
-                replace()
+                if (replacement.metricsChanged(transitionId != null)) replace()
                 return@post
             }
             invalidateForMetrics()
@@ -329,6 +330,35 @@ internal class NativeChromeOverlay(
         setAccessibilitySuspended(false)
         requestLayout()
         android.util.Log.d(TAG, "cleared")
+        replacePendingIfSettled()
+    }
+
+    /** A replacement deferred by a transition runs once nothing is in flight. */
+    private fun replacePendingIfSettled() {
+        if (!replacement.settled(transitionId != null)) return
+        val replace = onMetricsChanged ?: return
+        post { if (onMetricsChanged === replace) replace() }
+    }
+
+    /**
+     * Before the first apply: continue the replaced overlay's popup dim from
+     * where it is, instead of fading in again from no dim.
+     */
+    fun inheritPresentation(from: NativeChromeOverlay) {
+        topDim.alpha = from.topDim.alpha
+        bottomDim.alpha = from.bottomDim.alpha
+        railDim.alpha = from.railDim.alpha
+        toolbar.alpha = from.toolbar.alpha
+    }
+
+    /** This overlay was replaced: stop its animation, deferred badge work and transition. */
+    fun dispose() {
+        onMetricsChanged = null
+        toolbar.dismissPopupMenus()
+        endTransition()
+        dimAnimator?.cancel()
+        dimAnimator = null
+        detachTopBadges()
     }
 
     fun apply(next: NativeChromeStateSpec) {
@@ -343,6 +373,7 @@ internal class NativeChromeOverlay(
         applyTab(next.tab, next.appearance)
         applySuspension(next, previous)
         bringToFront()
+        replacePendingIfSettled()
     }
 
     private fun drawable(spec: NativeChromeIconSpec?, tint: Int?): Drawable? {
@@ -818,7 +849,10 @@ internal class NativeChromeOverlay(
                 image.alpha = snapshotOpacity * (1f - progress)
             }
             "update" -> if (id == transitionId) snapshot?.alpha = snapshotOpacity * (1f - progress)
-            "end" -> if (id == transitionId) endTransition()
+            "end" -> if (id == transitionId) {
+                endTransition()
+                replacePendingIfSettled()
+            }
         }
     }
 
