@@ -41,16 +41,22 @@ android {
     sourceSets {
         main.java.srcDirs += "src/main/kotlin"
         test.java.srcDirs += "src/test/kotlin"
+        androidTest.java.srcDirs += "src/androidTest/kotlin"
     }
 
     defaultConfig {
         minSdk = 24
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     dependencies {
         // Apache-2.0. Provides MaterialToolbar and BottomNavigationView.
         implementation("com.google.android.material:material:1.12.0")
         testImplementation("org.jetbrains.kotlin:kotlin-test")
+        // Overlay views on a device (`connectedDebugAndroidTest`).
+        androidTestImplementation("androidx.test:runner:1.2.0")
+        androidTestImplementation("androidx.test:core:1.7.0")
+        androidTestImplementation("androidx.test.ext:junit:1.3.0")
     }
 
     testOptions {

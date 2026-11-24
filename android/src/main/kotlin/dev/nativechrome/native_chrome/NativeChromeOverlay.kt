@@ -42,13 +42,19 @@ internal class NativeChromeOverlay(
 ) : FrameLayout(context) {
     private val themed = ContextThemeWrapper(context, com.google.android.material.R.style.Theme_Material3_Light_NoActionBar)
     val topContainer = FrameLayout(themed)
-    val toolbar = MaterialToolbar(themed)
+    // The bar views below are rebuilt in place when the activity handles a
+    // font size or display size change (see [rebuildBarViews]); the overlay,
+    // its containers, dims, transition snapshot and state stay.
+    var toolbar = MaterialToolbar(themed)
+        private set
     val bottomContainer = FrameLayout(themed)
-    val bottomNav = BottomNavigationView(themed)
+    var bottomNav = BottomNavigationView(themed)
+        private set
     /** Side rail used instead of [bottomNav] on large screens (opt-in, see [NativeChromeTabSpec.rail]). */
     val railContainer = FrameLayout(themed)
-    val rail = NavigationRailView(themed)
-    private val navs: List<NavigationBarView> = listOf(bottomNav, rail)
+    var rail = NavigationRailView(themed)
+        private set
+    private val navs: List<NavigationBarView> get() = listOf(bottomNav, rail)
     private var railActive = false
     private val topDim = View(context)
     private val bottomDim = View(context)
@@ -59,15 +65,6 @@ internal class NativeChromeOverlay(
     private val density get() = resources.displayMetrics.density
     /** Text scale and density the current bar and tab views were built with. */
     private var builtMetrics = NativeChromeMetrics.of(context)
-
-    /**
-     * Set by an owner that can replace this overlay (the plugin): called once
-     * when the activity handled a font size or display size change, so the
-     * owner installs a fresh overlay built with the current values. Without
-     * an owner the overlay rebuilds its own content in place.
-     */
-    var onMetricsChanged: (() -> Unit)? = null
-    private val replacement = NativeChromeMetricsReplacement()
 
     private var state: NativeChromeStateSpec? = null
     private var appliedTop: NativeChromeTopSpec? = null
@@ -116,39 +113,101 @@ internal class NativeChromeOverlay(
         topContainer.visibility = View.INVISIBLE
         bottomContainer.visibility = View.INVISIBLE
         railContainer.visibility = View.GONE
-        toolbar.tag = "native_chrome.topBar"
+        configureToolbar(toolbar)
         bottomNav.tag = "native_chrome.tabBar"
         rail.tag = "native_chrome.tabRail"
-        // Every tab label is always shown, as on iOS (UITabBar) and with the
-        // Flutter renderer (NavigationBar). Material's default "auto" mode
-        // shows only the selected label once there are four or more items.
-        for (nav in navs) nav.labelVisibilityMode = NativeChromeTabStyle.LABEL_VISIBILITY
-        // The container owns the system-bar padding; stop Material's own handling.
-        ViewCompat.setOnApplyWindowInsetsListener(bottomNav) { _, insets -> insets }
-        ViewCompat.setOnApplyWindowInsetsListener(rail) { _, insets -> insets }
-        ViewCompat.setOnApplyWindowInsetsListener(toolbar) { _, insets -> insets }
+        for (nav in navs) configureNav(nav)
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             recordInsets(insets)
             insets
         }
-        for (nav in navs) {
-            nav.setOnItemSelectedListener { item ->
-                if (applying) true else {
-                    request(item)
-                    false // Request only: Dart decides and answers with a new state.
-                }
-            }
-            nav.setOnItemReselectedListener { item -> if (!applying) request(item) }
-        }
-        toolbar.setOnMenuItemClickListener { item ->
+        addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> publishGeometry() }
+    }
+
+    private fun configureToolbar(bar: MaterialToolbar) {
+        bar.tag = "native_chrome.topBar"
+        // The container owns the system-bar padding; stop Material's own handling.
+        ViewCompat.setOnApplyWindowInsetsListener(bar) { _, insets -> insets }
+        bar.setOnMenuItemClickListener { item ->
             val top = state?.top
             val action = top?.actions?.getOrNull(topIds.index(item.itemId))
             if (top != null && action != null) {
-                emitTop(action, top.stamp, fromOverflow = toolbar.isOverflowMenuShowing)
+                emitTop(action, top.stamp, fromOverflow = bar.isOverflowMenuShowing)
             }
             true
         }
-        addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> publishGeometry() }
+    }
+
+    private fun configureNav(nav: NavigationBarView) {
+        // Every tab label is always shown, as on iOS (UITabBar) and with the
+        // Flutter renderer (NavigationBar). Material's default "auto" mode
+        // shows only the selected label once there are four or more items.
+        nav.labelVisibilityMode = NativeChromeTabStyle.LABEL_VISIBILITY
+        ViewCompat.setOnApplyWindowInsetsListener(nav) { _, insets -> insets }
+        nav.setOnItemSelectedListener { item ->
+            if (applying) true else {
+                request(item)
+                false // Request only: Dart decides and answers with a new state.
+            }
+        }
+        nav.setOnItemReselectedListener { item -> if (!applying) request(item) }
+    }
+
+    /**
+     * The activity handled a font size or display size change, so it keeps
+     * this view. The framework bars converted their text, height, padding and
+     * icon sizes to pixels when they were built; build new bar views with the
+     * current values in the same containers and show the current state.
+     *
+     * Everything else stays with this overlay: a running transition (its
+     * snapshot, id and input filter), the popup dim and its animation (which
+     * now drives the new toolbar's alpha), suspension and insets. Nothing is
+     * deferred or handed over.
+     */
+    private fun rebuildBarViews() {
+        builtMetrics = NativeChromeMetrics.of(context)
+        val oldToolbar = toolbar
+        oldToolbar.dismissPopupMenus()
+        detachTopBadges()
+        toolbar = MaterialToolbar(themed).also { next ->
+            next.alpha = oldToolbar.alpha
+            next.visibility = oldToolbar.visibility
+            next.layoutDirection = oldToolbar.layoutDirection
+            configureToolbar(next)
+            swap(topContainer, oldToolbar, next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        }
+        val oldBottom = bottomNav
+        bottomNav = BottomNavigationView(themed).also { next ->
+            next.tag = "native_chrome.tabBar"
+            next.visibility = oldBottom.visibility
+            configureNav(next)
+            swap(bottomContainer, oldBottom, next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        }
+        val oldRail = rail
+        rail = NavigationRailView(themed).also { next ->
+            next.tag = "native_chrome.tabRail"
+            next.visibility = oldRail.visibility
+            configureNav(next)
+            swap(railContainer, oldRail, next, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+        appliedTop = null
+        appliedTopKey = null
+        appliedTabItems = null
+        appliedTabKey = null
+        tabIds = emptyList()
+        // Bars only: suspension and its dim keep their running state.
+        state?.let {
+            applyTop(it.top, it.appearance)
+            applyTab(it.tab, it.appearance)
+        }
+        updateRailPadding()
+        requestLayout()
+    }
+
+    private fun swap(container: android.view.ViewGroup, old: View, next: View, params: LayoutParams) {
+        val index = container.indexOfChild(old)
+        container.removeView(old)
+        container.addView(next, index, params)
     }
 
     override fun onAttachedToWindow() {
@@ -224,39 +283,12 @@ internal class NativeChromeOverlay(
         // The rail follows the smallest screen width; resizing (multi-window,
         // foldables, configChanges-handled rotation) can cross 600dp.
         post {
-            val current = NativeChromeMetrics.of(context)
-            val replace = onMetricsChanged
-            if (current != builtMetrics && replace != null) {
-                builtMetrics = current
-                if (replacement.metricsChanged(transitionId != null)) replace()
+            if (NativeChromeMetrics.of(context) != builtMetrics) {
+                rebuildBarViews()
                 return@post
             }
-            invalidateForMetrics()
             reapply()
             requestLayout()
-        }
-    }
-
-    /**
-     * Without an owner that replaces this overlay: a font size or display
-     * size change handled by the activity keeps these views, whose text and
-     * control sizes were converted to pixels when they were built. Drop the
-     * applied content so the next apply rebuilds the bar's custom views, its
-     * menu and the tab items with the current values. Sizes the framework
-     * toolbar resolved at construction may stay; hosts that own an
-     * [EmbeddedNativeTopBar] recreate it instead (see [NativeChromeMetrics]).
-     */
-    private fun invalidateForMetrics() {
-        val current = NativeChromeMetrics.of(context)
-        if (current == builtMetrics) return
-        builtMetrics = current
-        appliedTop = null
-        appliedTopKey = null
-        appliedTabItems = null
-        tabIds = emptyList()
-        val size = android.util.TypedValue()
-        if (themed.theme.resolveAttribute(androidx.appcompat.R.attr.actionBarSize, size, true)) {
-            toolbar.minimumHeight = android.util.TypedValue.complexToDimensionPixelSize(size.data, resources.displayMetrics)
         }
     }
 
@@ -330,35 +362,6 @@ internal class NativeChromeOverlay(
         setAccessibilitySuspended(false)
         requestLayout()
         android.util.Log.d(TAG, "cleared")
-        replacePendingIfSettled()
-    }
-
-    /** A replacement deferred by a transition runs once nothing is in flight. */
-    private fun replacePendingIfSettled() {
-        if (!replacement.settled(transitionId != null)) return
-        val replace = onMetricsChanged ?: return
-        post { if (onMetricsChanged === replace) replace() }
-    }
-
-    /**
-     * Before the first apply: continue the replaced overlay's popup dim from
-     * where it is, instead of fading in again from no dim.
-     */
-    fun inheritPresentation(from: NativeChromeOverlay) {
-        topDim.alpha = from.topDim.alpha
-        bottomDim.alpha = from.bottomDim.alpha
-        railDim.alpha = from.railDim.alpha
-        toolbar.alpha = from.toolbar.alpha
-    }
-
-    /** This overlay was replaced: stop its animation, deferred badge work and transition. */
-    fun dispose() {
-        onMetricsChanged = null
-        toolbar.dismissPopupMenus()
-        endTransition()
-        dimAnimator?.cancel()
-        dimAnimator = null
-        detachTopBadges()
     }
 
     fun apply(next: NativeChromeStateSpec) {
@@ -373,7 +376,6 @@ internal class NativeChromeOverlay(
         applyTab(next.tab, next.appearance)
         applySuspension(next, previous)
         bringToFront()
-        replacePendingIfSettled()
     }
 
     private fun drawable(spec: NativeChromeIconSpec?, tint: Int?): Drawable? {
@@ -849,10 +851,7 @@ internal class NativeChromeOverlay(
                 image.alpha = snapshotOpacity * (1f - progress)
             }
             "update" -> if (id == transitionId) snapshot?.alpha = snapshotOpacity * (1f - progress)
-            "end" -> if (id == transitionId) {
-                endTransition()
-                replacePendingIfSettled()
-            }
+            "end" -> if (id == transitionId) endTransition()
         }
     }
 

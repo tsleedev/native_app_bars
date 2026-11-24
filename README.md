@@ -141,8 +141,9 @@ animating. These are checked again when a tap is delivered.
 
 An activity that handles `fontScale` or `density` changes itself keeps its
 views, whose text and control sizes were converted to pixels when they were
-built. The package overlay and `EmbeddedNativeTopBar` rebuild their bar and
-tab items when either changes. A host that builds its own bars compares
+built. The package overlay (also inside `EmbeddedNativeTopBar`) rebuilds its
+bar views in place when either changes; a running transition and the popup
+dim continue. A host that builds its own bars compares
 `NativeChromeMetrics.of(context)` with the snapshot it built them with, and
 rebuilds them, together with any `createConfigurationContext` snapshot.
 

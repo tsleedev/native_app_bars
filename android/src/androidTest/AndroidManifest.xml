@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="dev.nativechrome.native_chrome.OverlayTestActivity"
+            android:configChanges="fontScale|density|screenSize|smallestScreenSize|screenLayout|orientation"
+            android:exported="false"
+            android:theme="@style/Theme.Material3.Light.NoActionBar" />
+    </application>
+</manifest>
